@@ -13,11 +13,15 @@ public class VitalsInfo
 
     [Api]
     public Vital Mana { get; }
+    
+    [Api]
+    public Vital Ward { get; }
 
     public VitalsInfo(Life lifeComponent)
     {
         HP = Vital.From(lifeComponent.Health);
         ES = Vital.From(lifeComponent.EnergyShield);
         Mana = Vital.From(lifeComponent.Mana);
+        Ward = Vital.From(lifeComponent.Ward);
     }
 }
