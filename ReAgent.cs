@@ -11,6 +11,7 @@ using System.Windows.Forms;
 using ExileCore2;
 using ExileCore2.PoEMemory.Components;
 using ExileCore2.Shared.Helpers;
+using ExileCore2.Shared.Nodes;
 using ImGuiNET;
 using Newtonsoft.Json;
 using ReAgent.SideEffects;
@@ -189,48 +190,66 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
 
                 if (tabSelected)
                 {
-                    _pendingNames.TryGetValue(profile, out var newProfileName);
-                    newProfileName ??= profileName;
-                    ImGui.InputText("Name", ref newProfileName, 40);
-                    if (!isCurrentProfile)
+                    try
                     {
-                        using (ImGuiHelpers.UseStyleColor(ImGuiCol.Button, Color.Green.ToImgui()))
-                            if (ImGui.Button("Activate"))
-                            {
-                                Settings.CurrentProfile = profileName;
-                            }
-
-                        ImGui.SameLine();
-                    }
-
-                    if (ImGui.Button("Export profile"))
-                    {
-                        ImGui.SetClipboardText(DataExporter.ExportDataBase64(profile, "reagent_profile_v1", new JsonSerializerSettings()));
-                    }
-
-                    if (profileName != newProfileName)
-                    {
-                        if (Settings.Profiles.ContainsKey(newProfileName))
+                        var availableSpace = ImGui.GetContentRegionAvail();
+                        if (availableSpace.X < 100 || availableSpace.Y < 50)
                         {
-                            ImGui.SameLine();
-                            ImGui.TextColored(Color.Red.ToImguiVec4(), "This profile name is already used");
-                            _pendingNames.AddOrUpdate(profile, newProfileName);
+                            ImGui.TextColored(Color.Yellow.ToImguiVec4(), "Window too small - expand to view settings");
+                            ImGui.EndTabItem();
                         }
                         else
                         {
-                            Settings.Profiles.Remove(profileName);
-                            Settings.Profiles.Add(newProfileName, profile);
-                            if (isCurrentProfile)
+                            _pendingNames.TryGetValue(profile, out var newProfileName);
+                            newProfileName ??= profileName;
+                            ImGui.InputText("Name", ref newProfileName, 40);
+                            if (!isCurrentProfile)
                             {
-                                Settings.CurrentProfile = newProfileName;
+                                using (ImGuiHelpers.UseStyleColor(ImGuiCol.Button, Color.Green.ToImgui()))
+                                    if (ImGui.Button("Activate"))
+                                    {
+                                        Settings.CurrentProfile = profileName;
+                                    }
+
+                                ImGui.SameLine();
                             }
 
-                            _pendingNames.Clear();
+                            if (ImGui.Button("Export profile"))
+                            {
+                                ImGui.SetClipboardText(DataExporter.ExportDataBase64(profile, "reagent_profile_v1", new JsonSerializerSettings()));
+                            }
+
+                            if (profileName != newProfileName)
+                            {
+                                if (Settings.Profiles.ContainsKey(newProfileName))
+                                {
+                                    ImGui.SameLine();
+                                    ImGui.TextColored(Color.Red.ToImguiVec4(), "This profile name is already used");
+                                    _pendingNames.AddOrUpdate(profile, newProfileName);
+                                }
+                                else
+                                {
+                                    Settings.Profiles.Remove(profileName);
+                                    Settings.Profiles.Add(newProfileName, profile);
+                                    if (isCurrentProfile)
+                                    {
+                                        Settings.CurrentProfile = newProfileName;
+                                    }
+
+                                    _pendingNames.Clear();
+                                }
+                            }
+
+                            profile.DrawSettings(_state, Settings);
+                            ImGui.EndTabItem();
                         }
                     }
-
-                    profile.DrawSettings(_state, Settings);
-                    ImGui.EndTabItem();
+                    catch (Exception ex)
+                    {
+                        LogError($"Error rendering profile settings: {ex.Message}");
+                        ImGui.TextColored(Color.Red.ToImguiVec4(), "Error rendering - check logs");
+                        ImGui.EndTabItem();
+                    }
                 }
                 else
                 {
@@ -312,7 +331,7 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
             ImGui.End();
         }
 
-        if (!shouldExecute && !Settings.InspectState)
+        if (!shouldExecute && !Settings.InspectState && !Settings.ShowControllerState)
         {
             return;
         }
@@ -335,6 +354,11 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
         if (Settings.InspectState)
         {
             GameController.InspectObject(_state, "ReAgent state");
+        }
+
+        if (Settings.ShowControllerState)
+        {
+            DrawControllerStateWindow(_state);
         }
 
         if (!shouldExecute)
@@ -440,6 +464,116 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
             var textSize = Graphics.MeasureText(text);
             Graphics.DrawBox(position, position + textSize, Color.Black);
             Graphics.DrawText(text, position, ColorFromName(color));
+        }
+    }
+
+    private void DrawControllerStateWindow(RuleState state)
+    {
+        var show = Settings.ShowControllerState.Value;
+        if (!ImGui.Begin("Controller State", ref show))
+        {
+            Settings.ShowControllerState.Value = show;
+            ImGui.End();
+            return;
+        }
+
+        Settings.ShowControllerState.Value = show;
+        var controller = state.Controller;
+        ImGui.TextUnformatted($"Connected: {controller.IsConnected}");
+
+        ImGui.Separator();
+        DrawControllerButtonRows(controller);
+
+        ImGui.Separator();
+        DrawControllerBindingRows("Primary Skill Bar", controller.Skills.PrimaryCells, "Primary");
+        ImGui.Separator();
+        DrawControllerBindingRows("Secondary Skill Bar", controller.Skills.SecondaryCells, "Secondary");
+
+        ImGui.End();
+    }
+
+    private static void DrawControllerButtonRows(ControllerState controller)
+    {
+        if (ImGui.TreeNodeEx("Buttons", ImGuiTreeNodeFlags.DefaultOpen))
+        {
+            var start = ImGui.GetCursorScreenPos();
+            var lineHeight = ImGui.GetTextLineHeightWithSpacing();
+
+            DrawControllerButtonAt(controller, HotkeyNodeV2.ControllerKey.LTrigger, $"LT {controller.LeftTriggerPressure}", start, 20, 0);
+            DrawControllerButtonAt(controller, HotkeyNodeV2.ControllerKey.RTrigger, $"RT {controller.RightTriggerPressure}", start, 270, 0);
+
+            DrawControllerButtonAt(controller, HotkeyNodeV2.ControllerKey.Lb, "LB", start, 20, lineHeight);
+            DrawControllerButtonAt(controller, HotkeyNodeV2.ControllerKey.Rb, "RB", start, 270, lineHeight);
+
+            DrawControllerButtonAt(controller, HotkeyNodeV2.ControllerKey.Back, "Back", start, 115, lineHeight * 2);
+            DrawControllerButtonAt(controller, HotkeyNodeV2.ControllerKey.Start, "Start", start, 180, lineHeight * 2);
+
+            DrawControllerButtonAt(controller, HotkeyNodeV2.ControllerKey.Up, "Up", start, 70, lineHeight * 3);
+            DrawControllerButtonAt(controller, HotkeyNodeV2.ControllerKey.Left, "Left", start, 20, lineHeight * 4);
+            DrawControllerButtonAt(controller, HotkeyNodeV2.ControllerKey.Right, "Right", start, 105, lineHeight * 4);
+            DrawControllerButtonAt(controller, HotkeyNodeV2.ControllerKey.Down, "Down", start, 60, lineHeight * 5);
+
+            DrawControllerButtonAt(controller, HotkeyNodeV2.ControllerKey.Y, "Y", start, 270, lineHeight * 3);
+            DrawControllerButtonAt(controller, HotkeyNodeV2.ControllerKey.X, "X", start, 230, lineHeight * 4);
+            DrawControllerButtonAt(controller, HotkeyNodeV2.ControllerKey.B, "B", start, 310, lineHeight * 4);
+            DrawControllerButtonAt(controller, HotkeyNodeV2.ControllerKey.A, "A", start, 270, lineHeight * 5);
+
+            DrawControllerButtonAt(controller, HotkeyNodeV2.ControllerKey.Ls, "LS", start, 60, lineHeight * 6);
+            DrawControllerButtonAt(controller, HotkeyNodeV2.ControllerKey.Rs, "RS", start, 270, lineHeight * 6);
+
+            ImGui.SetCursorScreenPos(start + new Vector2(0, lineHeight * 7));
+
+            ImGui.TreePop();
+        }
+    }
+
+    private static void DrawControllerButtonAt(ControllerState controller, HotkeyNodeV2.ControllerKey key, string label, Vector2 start, float x, float y)
+    {
+        var pressed = controller.IsPressed(key);
+        ImGui.SetCursorScreenPos(start + new Vector2(x, y));
+        ImGui.TextColored((pressed ? Color.LightGreen : Color.Gray).ToImguiVec4(), label);
+    }
+
+    private static void DrawControllerBindingRows(string label, IReadOnlyList<ControllerBindingCell> cells, string id)
+    {
+        if (ImGui.TreeNodeEx(label, ImGuiTreeNodeFlags.DefaultOpen))
+        {
+            if (ImGui.BeginTable($"ControllerState{id}Table", 4, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchProp))
+            {
+                ImGui.TableSetupColumn("Cell");
+                ImGui.TableSetupColumn("Key");
+                ImGui.TableSetupColumn("Texture");
+                ImGui.TableSetupColumn("Copy");
+                ImGui.TableHeadersRow();
+
+                foreach (var cell in cells)
+                {
+                    ImGui.TableNextRow();
+                    ImGui.TableSetColumnIndex(0);
+                    ImGui.TextUnformatted(cell.Cell.ToString());
+                    ImGui.TableSetColumnIndex(1);
+                    ImGui.TextUnformatted(cell.Key.ToString());
+                    ImGui.TableSetColumnIndex(2);
+                    ImGui.TextUnformatted(string.IsNullOrWhiteSpace(cell.TextureFileName) ? "-" : cell.TextureFileName);
+                    if (!string.IsNullOrWhiteSpace(cell.Texture) && ImGui.IsItemHovered())
+                    {
+                        ImGui.SetTooltip(cell.Texture);
+                    }
+
+                    ImGui.TableSetColumnIndex(3);
+                    var hasTexture = !string.IsNullOrWhiteSpace(cell.TextureFileName);
+                    ImGui.BeginDisabled(!hasTexture);
+                    if (ImGui.SmallButton($"Copy##ControllerState{id}{cell.Cell}{cell.TextureFileName}"))
+                    {
+                        ImGui.SetClipboardText(cell.TextureFileName);
+                    }
+                    ImGui.EndDisabled();
+                }
+
+                ImGui.EndTable();
+            }
+
+            ImGui.TreePop();
         }
     }
 

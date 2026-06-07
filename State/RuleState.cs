@@ -31,6 +31,7 @@ public class RuleState
     private readonly Lazy<List<MonsterInfo>> _corpses;
     private readonly Lazy<List<EntityInfo>> _portals;
     private readonly Lazy<StatDictionary> _mapStats;
+    private readonly Lazy<ControllerState> _controllerState;
     private readonly GameController _controller;
 
     public RuleInternalState InternalState
@@ -51,6 +52,7 @@ public class RuleState
         _internalState = internalState;
         var controller = plugin.GameController;
         _controller = controller;
+        _controllerState = new Lazy<ControllerState>(() => new ControllerState(controller), LazyThreadSafetyMode.None);
         if (controller != null)
         {
             IsInHideout = plugin.GameController.Area.CurrentArea.IsHideout;
@@ -236,6 +238,9 @@ public class RuleState
 
     [Api]
     public bool IsKeyPressed(Keys key) => Input.IsKeyDown(key);
+
+    [Api]
+    public ControllerState Controller => _controllerState.Value;
 
     [Api]
     public bool SinceLastActivation(double minTime) =>
