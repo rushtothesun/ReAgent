@@ -1,11 +1,26 @@
 # ReAgent
 
-If you like it, you can donate via:
+## Changes in this fork
 
-BTC: bc1qke67907s6d5k3cm7lx7m020chyjp9e8ysfwtuz
+- Added controller-aware rule APIs:
+  - `State.IsUsingController`
+  - `State.Controller.IsConnected`
+  - `State.Controller.IsPressed(ControllerKey)`
+  - `State.Controller.LeftTriggerPressure`
+  - `State.Controller.RightTriggerPressure`
+- Added controller skill binding lookup APIs:
+  - `State.Controller.Skills.PrimaryKeyForTexture(...)`
+  - `State.Controller.Skills.SecondaryKeyForTexture(...)`
+  - `State.Controller.Skills.HasPrimaryTexture(...)`
+  - `State.Controller.Skills.HasSecondaryTexture(...)`
+- Added a `ShowControllerState` debug window for live controller button state, trigger pressure, primary/secondary skill bar bindings, and copyable skill icon texture names.
+- Added input-specific keybinds for normal `Key` rules:
+  - `Keyboard` binding uses `KeyV2`.
+  - `Controller` binding uses `ControllerKeyV2`.
+- Changed new key rules to default to `None` instead of `D0`.
 
-ETH: 0x3A37B3f57453555C2ceabb1a2A4f55E0eB969105 
+Use `Show Controller State` to copy the DDS of a skill for use in a rule. For example, the following will attempt to locate the Snipe skill and find its binding on the primary skill bar:
 
-# Docs
-
-Some docs: https://excore2.github.io/ReAgent/
+```csharp
+var snipeKey = State.Controller.Skills.PrimaryKeyForTexture("RangerSnipeShotArrow.dds");
+```
