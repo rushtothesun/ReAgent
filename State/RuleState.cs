@@ -240,6 +240,9 @@ public class RuleState
     public bool IsKeyPressed(Keys key) => Input.IsKeyDown(key);
 
     [Api]
+    public bool IsUsingController => _controller?.IsUsingController == true;
+
+    [Api]
     public ControllerState Controller => _controllerState.Value;
 
     [Api]

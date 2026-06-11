@@ -69,23 +69,26 @@ public class Rule
     {
         get
         {
-            return KeyV2 switch { { Key: { } k } => k, _ => null };
+            return KeyV2 switch { { Mode: HotkeyNodeMode.Keyboard, Key: { } k } => k, _ => null };
         }
         set
         {
-            KeyV2 = value switch { null => null, { } k => new HotkeyNodeValue(k) };
+            KeyV2 = value switch { null => CreateNoneKey(), { } k => new HotkeyNodeValue(k) };
         }
     }
 
     public bool ShouldSerializeKey() => false;
 
-    public HotkeyNodeValue KeyV2 = new HotkeyNodeValue(Keys.D0);
+    public HotkeyNodeValue KeyV2 = CreateNoneKey();
+    public HotkeyNodeValue ControllerKeyV2 = CreateNoneKey();
     public int SyntaxVersion;
     private Lazy<(Func<RuleState, IEnumerable<ISideEffect>> Func, string Exception)> _compilationResult;
     private string _lastException;
     private ulong _exceptionCounter;
     private static readonly InteractiveAssemblyLoader loader;
     private static readonly PortableExecutableReference metadataReference;
+    private ControllerKey _controllerPickerKey = ControllerKey.None;
+    private ControllerKey _controllerPickerModifierKey = ControllerKey.None;
 
     [JsonIgnore]
     public int PendingEffectCount { get; set; }
@@ -106,11 +109,13 @@ public class Rule
                 switch (Type)
                 {
                     case RuleActionType.Key:
-                        KeyV2 = new HotkeyNodeValue(Keys.D0);
+                        KeyV2 = CreateNoneKey();
+                        ControllerKeyV2 = CreateNoneKey();
                         break;
                     case RuleActionType.SingleSideEffect:
                     case RuleActionType.MultipleSideEffects:
                         KeyV2 = null;
+                        ControllerKeyV2 = null;
                         break;
                 }
 
@@ -125,18 +130,23 @@ public class Rule
 
         if (Type == RuleActionType.Key)
         {
-            var key = KeyV2;
+            NormalizeKeyBindings();
+            var key = KeyV2 ?? CreateNoneKey();
+            var controllerKey = ControllerKeyV2 ?? CreateNoneKey();
             if (expand)
             {
-                var hotkeyNode = new HotkeyNodeV2(key) { AllowControllerKeys = true };
-                if (hotkeyNode.DrawPickerButton($"Key {key}"))
+                var hotkeyNode = new HotkeyNodeV2(key) { AllowControllerKeys = false };
+                if (hotkeyNode.DrawPickerButton($"Keyboard {key}"))
                 {
-                    KeyV2 = hotkeyNode.Value;
+                    KeyV2 = NormalizeKeyboardKey(hotkeyNode.Value);
                 }
+
+                ImGui.SameLine();
+                DrawControllerPickerButton(controllerKey);
             }
             else
             {
-                ImGui.Text($"Presses key {key}");
+                ImGui.Text($"Presses keyboard {key}, {FormatControllerKeyLabel(controllerKey)}");
                 ImGui.SameLine();
             }
         }
@@ -145,7 +155,7 @@ public class Rule
         {
             ImGui.TextWrapped("Rule source");
             ImGui.SameLine();
-            var syntaxState = SyntaxVersion switch { 1 => false, 2 => true };
+            var syntaxState = SyntaxVersion switch { 2 => true, _ => false };
             if (ImGui.Checkbox("Use new syntax", ref syntaxState))
             {
                 SyntaxVersion = syntaxState ? 2 : 1;
@@ -203,10 +213,109 @@ public class Rule
         }
     }
 
+    private static HotkeyNodeValue CreateNoneKey() => new(Keys.None);
+
+    private static HotkeyNodeValue NormalizeKeyboardKey(HotkeyNodeValue value) =>
+        value is { Mode: HotkeyNodeMode.Keyboard } ? value : CreateNoneKey();
+
+    private static HotkeyNodeValue CreateControllerKey(ControllerKey key, ControllerKey modifierKey) =>
+        key == ControllerKey.None
+            ? CreateNoneKey()
+            : new HotkeyNodeValue(key, modifierKey);
+
+    private static bool IsAssigned(HotkeyNodeValue value) => value is { Mode: not HotkeyNodeMode.None };
+
+    private static string FormatControllerKey(HotkeyNodeValue value)
+    {
+        var text = value?.ToString() ?? "None";
+        return text.StartsWith("C[", StringComparison.Ordinal)
+            ? text[1..]
+            : text;
+    }
+
+    private static string FormatControllerKeyLabel(HotkeyNodeValue value)
+    {
+        return $"Controller {FormatControllerKey(value)}";
+    }
+
+    private void NormalizeKeyBindings()
+    {
+        if (KeyV2 is { Mode: HotkeyNodeMode.Controller } legacyControllerKey)
+        {
+            if (!IsAssigned(ControllerKeyV2))
+            {
+                ControllerKeyV2 = legacyControllerKey;
+            }
+
+            KeyV2 = CreateNoneKey();
+        }
+
+        if (KeyV2 == null)
+        {
+            KeyV2 = CreateNoneKey();
+        }
+
+        if (ControllerKeyV2 is not { Mode: HotkeyNodeMode.Controller })
+        {
+            ControllerKeyV2 = CreateNoneKey();
+        }
+    }
+
+    private HotkeyNodeValue GetActiveKey(RuleState state)
+    {
+        NormalizeKeyBindings();
+        var key = state.IsUsingController ? ControllerKeyV2 : KeyV2;
+        if (IsAssigned(key))
+        {
+            return key;
+        }
+
+        throw new Exception(state.IsUsingController
+            ? "Controller key is not assigned"
+            : "Keyboard key is not assigned");
+    }
+
+    private void DrawControllerPickerButton(HotkeyNodeValue controllerKey)
+    {
+        if (ImGui.Button(FormatControllerKeyLabel(controllerKey)))
+        {
+            _controllerPickerKey = controllerKey is { Mode: HotkeyNodeMode.Controller }
+                ? controllerKey.ControllerKey
+                : ControllerKey.None;
+            _controllerPickerModifierKey = controllerKey is { Mode: HotkeyNodeMode.Controller }
+                ? controllerKey.ControllerModifierKey
+                : ControllerKey.None;
+            ImGui.OpenPopup("ControllerKeyPicker");
+        }
+
+        if (ImGui.BeginPopup("ControllerKeyPicker"))
+        {
+            ImGui.TextUnformatted("Controller");
+            ImGui.Separator();
+            ImguiExt.EnumerableComboBox("Modifier", Enum.GetValues<ControllerKey>(), ref _controllerPickerModifierKey);
+            ImguiExt.EnumerableComboBox("Button", Enum.GetValues<ControllerKey>(), ref _controllerPickerKey);
+
+            if (ImGui.Button("Save"))
+            {
+                ControllerKeyV2 = CreateControllerKey(_controllerPickerKey, _controllerPickerModifierKey);
+                ImGui.CloseCurrentPopup();
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button("Clear"))
+            {
+                ControllerKeyV2 = CreateNoneKey();
+                ImGui.CloseCurrentPopup();
+            }
+
+            ImGui.EndPopup();
+        }
+    }
+
     private void ResetFunction()
     {
         _exceptionCounter = 0;
-        _compilationResult = new(SyntaxVersion switch { 1 => RebuildFunctionV1, 2 => RebuildFunctionV2 }, LazyThreadSafetyMode.None);
+        _compilationResult = new(SyntaxVersion switch { 2 => RebuildFunctionV2, _ => RebuildFunctionV1 }, LazyThreadSafetyMode.None);
     }
 
     private (Func<RuleState, IEnumerable<ISideEffect>> Func, string LastException) RebuildFunctionV1()
@@ -222,7 +331,7 @@ public class Rule
                         false,
                         RuleSource);
                     var boolFunc = expression.Compile();
-                    return (s => boolFunc(s) ? [new PressKeySideEffect(KeyV2 ?? throw new Exception("Key is not assigned"))] : [], null);
+                    return (s => boolFunc(s) ? [new PressKeySideEffect(GetActiveKey(s))] : [], null);
                 }
                 case RuleActionType.SingleSideEffect:
                 {
@@ -265,7 +374,7 @@ public class Rule
                 {
                     var @delegate = DelegateCompiler.CompileDelegate<ScriptFunc<bool>>(RuleSource, ScriptOptions, CreateAlc());
                     return (s => @delegate(s)
-                        ? [new PressKeySideEffect(KeyV2 ?? throw new Exception("Key is not assigned"))]
+                        ? [new PressKeySideEffect(GetActiveKey(s))]
                         : [], null);
                 }
                 case RuleActionType.SingleSideEffect:
