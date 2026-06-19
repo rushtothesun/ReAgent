@@ -106,6 +106,9 @@ public sealed class ExileAuraDisplayRuntime
     internal ExileAuraDisplay Display { get; }
     public string Name { get; }
     public bool Enabled { get; set; }
+    public string Value { get; internal set; } = "";
+    public string Text { get; set; } = "";
+    public string TextOverride { get; set; } = "";
 }
 
 public sealed record ExileAuraFrameLayout(

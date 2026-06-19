@@ -55,6 +55,11 @@ internal sealed class ExileAuraConditionCompiler
     public ExileAuraEvaluation Evaluate(ExileAuraRule rule, RuleState state)
     {
         var displays = CreateDisplayStates(rule, out var displayError);
+        foreach (var display in displays)
+        {
+            display.Value = ExileAuraDisplayText.BuildDefaultText(display.Display, rule, state);
+        }
+
         if (!string.IsNullOrWhiteSpace(displayError))
         {
             return new ExileAuraEvaluation(false, displayError, displays);

@@ -38,4 +38,14 @@ public sealed partial class ExileAurasModule
     {
         return IsFiniteTimer(timer) ? $"{timer:0.0}s" : "";
     }
+
+    internal static bool IsFiniteTimerForDisplay(float timer)
+    {
+        return IsFiniteTimer(timer);
+    }
+
+    internal static string FormatTimerForDisplay(float timer)
+    {
+        return FormatTimer(timer);
+    }
 }

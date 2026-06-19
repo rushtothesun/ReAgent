@@ -286,7 +286,7 @@ public sealed partial class ExileAurasModule
     {
         foreach (var runtimeDisplay in entry.Displays.Where(display => display.Enabled))
         {
-            var text = BuildDisplayText(runtimeDisplay.Display, entry.Rule, state);
+            var text = ResolveDisplayText(runtimeDisplay);
             if (string.IsNullOrWhiteSpace(text))
             {
                 continue;
@@ -301,30 +301,19 @@ public sealed partial class ExileAurasModule
         }
     }
 
-    private static string BuildDisplayText(ExileAuraDisplay display, ExileAuraRule rule, RuleState state)
+    private static string ResolveDisplayText(ExileAuraDisplayRuntime display)
     {
-        if (string.IsNullOrWhiteSpace(rule.SourceName))
+        if (!string.IsNullOrEmpty(display.TextOverride))
         {
-            return "";
+            return display.TextOverride;
         }
 
-        var rows = state.Buffs.AllBuffs
-            .Where(buff => string.Equals(buff.Name, rule.SourceName, StringComparison.Ordinal))
-            .ToList();
-
-        if (rows.Count == 0)
+        if (!string.IsNullOrEmpty(display.Text))
         {
-            return "";
+            return display.Text;
         }
 
-        return display.Effect switch
-        {
-            ExileAuraDisplayEffect.ShowTimer => FormatTimer(rows.Select(x => (float)x.TimeLeft).Where(IsFiniteTimer).DefaultIfEmpty(float.PositiveInfinity).Min()),
-            ExileAuraDisplayEffect.ShowCharges => rows.Max(x => x.Charges).ToString(),
-            ExileAuraDisplayEffect.ShowInstanceCount => rows.Count.ToString(),
-            ExileAuraDisplayEffect.ShowStack => rows.Max(x => x.Stacks).ToString(),
-            _ => ""
-        };
+        return display.Value;
     }
 
     private static Vector2 ResolveDisplayTextPosition(ExileAuraDisplay display, Vector2 iconPosition, float iconSize, Vector2 textSize)
