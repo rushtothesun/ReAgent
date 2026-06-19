@@ -13,7 +13,7 @@ namespace ReAgent.ReAgentAuras;
 public sealed partial class ReAgentAurasModule
 {
     private static readonly string[] VisualOptions = ["Color", "Icon", "Manual Icon"];
-    private static readonly string[] DisplayEffectOptions = ["Show Timer", "Show Charges", "Show Instance Count", "Show Stack"];
+    private static readonly string[] DisplayEffectOptions = ["Show Timer", "Show Charges", "Show Instance Count", "Show Stack", "Show Custom Text"];
     private static readonly string[] StartPositionOptions = Enum.GetNames<ReAgentAuraStartPosition>();
 
     internal void DrawRuleEditor(ReAgentAuraRule rule, RuleState state, bool expand)
@@ -110,17 +110,79 @@ public sealed partial class ReAgentAurasModule
         DrawColorEdit("Color", rule.Color, color => rule.Color = color);
     }
 
-    private static void DrawManualIconPath(ReAgentAuraRule rule)
+    private void DrawManualIconPath(ReAgentAuraRule rule)
     {
         ImGui.PushItemWidth(520);
         var manualIconPath = rule.ManualIconPath ?? string.Empty;
         if (ImGui.InputText("Manual Icon PNG Path", ref manualIconPath, 512))
         {
             rule.ManualIconPath = manualIconPath;
-            rule.IconTextureKey = ReAgentAuraTextureKeys.Icon(rule);
+            rule.IconTextureKey = ReAgentAuraTextureKeys.ManualIcon(rule);
         }
 
         ImGui.PopItemWidth();
+
+        var canRegister = !string.IsNullOrWhiteSpace(rule.ManualIconPath);
+        if (!canRegister)
+        {
+            ImGui.BeginDisabled();
+        }
+
+        if (ImGui.Button("Register Icon"))
+        {
+            RegisterManualIcon(rule);
+        }
+
+        if (!canRegister)
+        {
+            ImGui.EndDisabled();
+            ImGui.SameLine();
+            ImGui.TextColored(Color.Gray.ToImguiVec4(), "Needs a PNG path.");
+        }
+
+        var status = GetIconStatus(rule);
+        if (status != null)
+        {
+            ImGui.SameLine();
+            var color = status.Kind == ReAgentAuraIconStatusKind.Failed ? Color.Salmon : Color.LightGreen;
+            ImGui.TextColored(color.ToImguiVec4(), status.Message);
+        }
+    }
+
+    private void RegisterManualIcon(ReAgentAuraRule rule)
+    {
+        var path = rule.ManualIconPath?.Trim();
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            SetIconStatus(rule, ReAgentAuraIconStatusKind.Failed, "Manual icon path is empty.");
+            return;
+        }
+
+        try
+        {
+            path = Path.GetFullPath(path);
+        }
+        catch (Exception ex)
+        {
+            SetIconStatus(rule, ReAgentAuraIconStatusKind.Failed, $"Manual icon path is invalid: {ex.Message}");
+            return;
+        }
+
+        if (!File.Exists(path))
+        {
+            SetIconStatus(rule, ReAgentAuraIconStatusKind.Failed, "Manual icon file was not found.");
+            return;
+        }
+
+        rule.ManualIconPath = path;
+        rule.IconTextureKey = ReAgentAuraTextureKeys.ManualIcon(rule);
+        if (TryEnsureImageRegistered(rule.IconTextureKey, path))
+        {
+            SetIconStatus(rule, ReAgentAuraIconStatusKind.Ready, "Manual icon registered.");
+            return;
+        }
+
+        SetIconStatus(rule, ReAgentAuraIconStatusKind.Failed, "Manual icon could not be registered.");
     }
 
     private void DrawIconExtraction(ReAgentAuraRule rule)

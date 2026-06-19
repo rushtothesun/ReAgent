@@ -145,9 +145,9 @@ public sealed partial class ReAgentAurasModule
         ImGui.SetNextWindowSize(dragSize, ImGuiCond.Always);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
 
-        if (ImGui.Begin($"##exileauras_drag_surface_{rule.Id}", flags))
+        if (ImGui.Begin($"##reagentauras_drag_surface_{rule.Id}", flags))
         {
-            ImGui.InvisibleButton($"##exileauras_drag_button_{rule.Id}", dragSize);
+            ImGui.InvisibleButton($"##reagentauras_drag_button_{rule.Id}", dragSize);
             var hovered = ImGui.IsItemHovered();
             var active = ImGui.IsItemActive();
 
@@ -254,7 +254,12 @@ public sealed partial class ReAgentAurasModule
 
     private bool TryEnsureRuleIconRegistered(ReAgentAuraRule rule, out string textureKey)
     {
-        textureKey = string.IsNullOrWhiteSpace(rule.IconTextureKey) ? ReAgentAuraTextureKeys.Icon(rule) : rule.IconTextureKey;
+        var expectedTextureKey = rule.Visual == ReAgentAuraVisualSource.ManualIcon
+            ? ReAgentAuraTextureKeys.ManualIcon(rule)
+            : ReAgentAuraTextureKeys.Icon(rule);
+        textureKey = rule.Visual == ReAgentAuraVisualSource.ManualIcon || string.IsNullOrWhiteSpace(rule.IconTextureKey)
+            ? expectedTextureKey
+            : rule.IconTextureKey;
         rule.IconTextureKey = textureKey;
 
         var iconPath = rule.Visual == ReAgentAuraVisualSource.ManualIcon ? rule.ManualIconPath : rule.ExtractedPngPath;
@@ -323,12 +328,7 @@ public sealed partial class ReAgentAurasModule
 
     private static string ResolveDisplayText(ReAgentAuraDisplayRuntime display)
     {
-        if (!string.IsNullOrEmpty(display.TextOverride))
-        {
-            return display.TextOverride;
-        }
-
-        if (!string.IsNullOrEmpty(display.Text))
+        if (display.Display.Effect == ReAgentAuraDisplayEffect.ShowCustomText)
         {
             return display.Text;
         }

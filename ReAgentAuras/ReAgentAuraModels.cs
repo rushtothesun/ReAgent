@@ -18,7 +18,8 @@ public enum ReAgentAuraDisplayEffect
     ShowTimer,
     ShowCharges,
     ShowInstanceCount,
-    ShowStack
+    ShowStack,
+    ShowCustomText
 }
 
 public enum ReAgentAuraStartPosition
@@ -92,6 +93,8 @@ public sealed class ReAgentAuraDisplay
 [Api]
 public sealed class ReAgentAuraDisplayRuntime
 {
+    private string _text = "";
+
     internal ReAgentAuraDisplayRuntime(ReAgentAuraDisplay display)
     {
         Display = display;
@@ -107,9 +110,20 @@ public sealed class ReAgentAuraDisplayRuntime
     [Api]
     public string Value { get; internal set; } = "";
     [Api]
-    public string Text { get; set; } = "";
-    [Api]
-    public string TextOverride { get; set; } = "";
+    public string Text
+    {
+        get => Display.Effect == ReAgentAuraDisplayEffect.ShowCustomText ? _text : "";
+        set
+        {
+            if (Display.Effect != ReAgentAuraDisplayEffect.ShowCustomText)
+            {
+                throw new InvalidOperationException(
+                    $"Display '{Name}' uses effect '{Display.Effect}'. Text can only be set on Show Custom Text displays.");
+            }
+
+            _text = value ?? "";
+        }
+    }
 }
 
 public sealed record ReAgentAuraFrameLayout(

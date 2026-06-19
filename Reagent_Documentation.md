@@ -685,6 +685,10 @@ Create ReAgentAuras by making a `ReAgentAura Rule` group from the group `+` butt
 | `Icon` | Uses a DDS icon discovered from the active source buff or player skill, extracts it from `Content.ggpk`, converts it to PNG, and registers it with ExileCore. |
 | `Manual Icon` | Uses an existing PNG path on disk. |
 
+For `Manual Icon`, enter the PNG path and press `Register Icon`.
+ReAgent validates that the file exists, creates a texture key from the rule id and manual icon path, and registers the image with ExileCore.
+Changing the manual icon path changes the texture key so a previous registered image is not reused accidentally.
+
 For `Icon`, the source must be discoverable:
 
 - If `Source Name` matches an active player buff, ReAgent first tries the buff visual DDS path.
@@ -762,8 +766,9 @@ Display effects:
 | `Show Charges` | Maximum `Charges` from matching buff rows. |
 | `Show Instance Count` | Count of matching buff rows. Useful for effects represented by repeated buff instances. |
 | `Show Stack` | Maximum `Stacks` from matching buff rows. |
+| `Show Custom Text` | No default value. Displays `Text` set in condition code. |
 
-The default display `Value` is buff-based. For text based on a skill, cooldown, custom calculation, or non-buff state, set `Text` or `TextOverride` in the condition code.
+Built-in display effects render their default `Value`. Setting `Text` on a built-in display effect throws an error. Use `Show Custom Text` for text based on a skill, cooldown, custom calculation, or non-buff state.
 
 ### 7.6. Condition Code
 
@@ -783,11 +788,10 @@ Displays only draw when:
 - The condition code sets `Display("Name").Enabled = true`.
 - The display resolves non-empty text.
 
-Display text resolution order is:
+Display text resolution depends on the display effect:
 
-1. `TextOverride`, if not empty.
-2. `Text`, if not empty.
-3. `Value`, the default value from the selected display effect.
+- `Show Timer`, `Show Charges`, `Show Instance Count`, and `Show Stack` render `Value`.
+- `Show Custom Text` renders `Text`.
 
 `Display("Name")` only searches displays on the same ReAgentAura rule. It does not affect displays in other rules, even if they have the same name.
 
@@ -798,8 +802,7 @@ Display text resolution order is:
 | `Name` | `string` | Display name. |
 | `Enabled` | `bool` | Set this to true to draw the display. Defaults to false every evaluation. |
 | `Value` | `string` | Default text calculated from the display effect. |
-| `Text` | `string` | Custom text. If set, it replaces `Value`. |
-| `TextOverride` | `string` | Highest-priority custom text. If set, it replaces both `Text` and `Value`. |
+| `Text` | `string` | Custom text used only by `Show Custom Text` displays. Setting this on a built-in display effect throws an error. |
 
 Example: show a default Tailwind timer.
 
@@ -812,49 +815,64 @@ timer.Enabled = buff.Exists;
 return buff.Exists;
 ```
 
-Example: prefix the default timer text.
+Example: prefix the default timer text with a separate custom display.
+
+Display setup:
+
+- `Timer`: `Show Timer`
+- `Label`: `Show Custom Text`
 
 ```csharp
 var buff = State.Buffs["tailwind"];
 var timer = Display("Timer");
+var label = Display("Label");
 
 timer.Enabled = buff.Exists;
-timer.Text = $"Tailwind: {timer.Value}";
+label.Enabled = buff.Exists && !string.IsNullOrWhiteSpace(timer.Value);
+label.Text = $"Tailwind: {timer.Value}";
 
 return buff.Exists;
 ```
 
-Example: overwrite the display with custom text.
+Example: show custom mark status text.
+
+Display setup:
+
+- `MarkStatus`: `Show Custom Text`
 
 ```csharp
-var skill = State.Skills["create_mirage"];
-var ready = Display("Ready");
+var skill = State.Skills["FreezingMarkPlayer"];
+if (!skill.Exists)
+{
+    return false;
+}
 
-ready.Enabled = skill.Exists && skill.CanBeUsed;
-ready.TextOverride = "Ready";
-
-return skill.Exists;
-```
-
-Example: show an icon when a buff is missing, but show the timer only when the buff exists and is nearly expired.
-
-```csharp
 var buff = State.Buffs["freezing_mark_damage_buff"];
-var timer = Display("Timer");
+var status = Display("MarkStatus");
 
-timer.Enabled = buff.Exists && buff.TimeLeft <= 3;
+if (buff.Exists && buff.TimeLeft > 4)
+{
+    return false;
+}
 
-return !buff.Exists || buff.TimeLeft <= 3;
+status.Enabled = true;
+status.Text = buff.Exists ? $"{buff.TimeLeft:0.0}s" : "Ready";
+
+return true;
 ```
 
-Example: count repeated Tailwind instances.
+Example: show a custom count of repeated Tailwind instances.
+
+Display setup:
+
+- `TailwindStacks`: `Show Custom Text`
 
 ```csharp
 var count = State.Buffs.AllBuffs.Count(x => x.Name == "tailwind");
-var stacks = Display("Stacks");
+var stacks = Display("TailwindStacks");
 
 stacks.Enabled = count > 0;
-stacks.TextOverride = count.ToString();
+stacks.Text = count.ToString();
 
 return count > 0;
 ```
@@ -954,85 +972,3 @@ Every side effect returns a `SideEffectApplicationResult` when ReAgent attempts 
 | `AppliedDuplicate` | The side effect was already in the requested state. It is treated as successfully applied but not logged as a new unique action. |
 
 Delayed side effects and key presses commonly return `UnableToApply` until they can finish.
-
-## 11. Common Examples
-
-### 11.1. Use a Key Rule for a Defensive Flask
-
-Action type: `Key`
-
-Configured key: your flask key
-
-V2 source:
-
-```csharp
-return State.Vitals.HP.Percent < 50 &&
-       State.Flasks.Flask1.CanBeUsed &&
-       State.SinceLastActivation(0.5);
-```
-
-### 11.2. Display Warning Text Near the Center of the Screen
-
-Action type: `SingleSideEffect`
-
-V2 source:
-
-```csharp
-if (!State.Buffs["freezing_mark_damage_buff"].Exists)
-{
-    return null;
-}
-
-return new DisplayTextSideEffect(
-    "Freezing Mark",
-    new Vector2(900, 500),
-    "LightBlue");
-```
-
-### 11.3. Start a Timer When a Skill Is Used
-
-Action type: `SingleSideEffect`
-
-V2 source:
-
-```csharp
-var skill = State.Skills["create_mirage"];
-if (!skill.Exists || !skill.IsUsing)
-{
-    return null;
-}
-
-return new RestartTimerSideEffect("mirage-used");
-```
-
-### 11.4. Show a ReAgentAura When a Skill Is Off Cooldown
-
-ReAgentAura fields:
-
-- `Source Name`: `create_mirage`
-- `Visual`: `Icon` or `Manual Icon`
-- Add a display named `Ready`.
-
-Condition:
-
-```csharp
-var skill = State.Skills["create_mirage"];
-var ready = Display("Ready");
-
-ready.Enabled = skill.Exists && skill.CanBeUsed;
-ready.TextOverride = "Ready";
-
-return skill.Exists && skill.CanBeUsed;
-```
-
-### 11.5. Hide a Whole Group When Panels Are Open
-
-Enable `Use Group Condition` on the group:
-
-```csharp
-return !State.IsChatOpen
-    && !State.IsLeftPanelOpen
-    && !State.IsRightPanelOpen
-    && !State.IsAnyFullscreenPanelOpen
-    && !State.IsAnyLargePanelOpen;
-```

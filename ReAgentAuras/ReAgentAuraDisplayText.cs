@@ -28,6 +28,7 @@ internal static class ReAgentAuraDisplayText
             ReAgentAuraDisplayEffect.ShowCharges => rows.Max(x => x.Charges).ToString(),
             ReAgentAuraDisplayEffect.ShowInstanceCount => rows.Count.ToString(),
             ReAgentAuraDisplayEffect.ShowStack => rows.Max(x => x.Stacks).ToString(),
+            ReAgentAuraDisplayEffect.ShowCustomText => "",
             _ => ""
         };
     }
