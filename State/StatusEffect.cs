@@ -10,6 +10,7 @@ public record StatusEffect(
     [property: Api] double TimeLeft,
     [property: Api] double TotalTime,
     [property: Api] int Charges,
+    [property: Api] int Stacks,
     [property: Api] int FlaskSlot,
     Lazy<SkillInfo> SkillInfoLazy)
 {

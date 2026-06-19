@@ -28,4 +28,14 @@ public sealed partial class ExileAurasModule
             .Select(x => char.ToUpperInvariant(x[0])));
         return string.IsNullOrWhiteSpace(initials) ? "?" : initials;
     }
+
+    private static bool IsFiniteTimer(float timer)
+    {
+        return timer > 0f && timer < 9999f && !float.IsInfinity(timer) && !float.IsNaN(timer);
+    }
+
+    private static string FormatTimer(float timer)
+    {
+        return IsFiniteTimer(timer) ? $"{timer:0.0}s" : "";
+    }
 }

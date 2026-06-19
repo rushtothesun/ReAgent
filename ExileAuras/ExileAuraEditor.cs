@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Linq;
 using System.Numerics;
 using ExileCore2.Shared.Helpers;
 using ExileCore2.Shared.Nodes;
@@ -11,6 +12,8 @@ namespace ReAgent.ExileAuras;
 public sealed partial class ExileAurasModule
 {
     private static readonly string[] VisualOptions = ["Color", "Icon", "Manual Icon"];
+    private static readonly string[] DisplayEffectOptions = ["Show Timer", "Show Charges", "Show Instance Count", "Show Stack"];
+    private static readonly string[] StartPositionOptions = Enum.GetNames<ExileAuraStartPosition>();
 
     internal void DrawRuleEditor(ExileAuraRule rule, RuleState state, bool expand)
     {
@@ -32,6 +35,7 @@ public sealed partial class ExileAurasModule
         ImGui.PopItemWidth();
 
         DrawVisualOptions(rule);
+        DrawDisplays(rule);
         DrawCondition(rule, state);
     }
 
@@ -155,6 +159,139 @@ public sealed partial class ExileAurasModule
         }
     }
 
+    private void DrawDisplays(ExileAuraRule rule)
+    {
+        if (!ImGui.TreeNodeEx("Displays###exileAuraDisplays", ImGuiTreeNodeFlags.DefaultOpen))
+        {
+            return;
+        }
+
+        if (ImGui.Button("Add Display"))
+        {
+            var display = ExileAuraDisplay.Create(ExileAuraDisplayEffect.ShowTimer);
+            display.Name = GetNewDisplayName(rule);
+            rule.Displays.Add(display);
+        }
+
+        DrawDisplayNameWarnings(rule);
+
+        for (var i = 0; i < rule.Displays.Count; i++)
+        {
+            DrawDisplayRow(rule, rule.Displays[i], i);
+        }
+
+        ImGui.TreePop();
+    }
+
+    private void DrawDisplayRow(ExileAuraRule rule, ExileAuraDisplay display, int index)
+    {
+        if (string.IsNullOrWhiteSpace(display.Id))
+        {
+            display.Id = Guid.NewGuid().ToString("N");
+        }
+
+        ImGui.PushID(display.Id);
+
+        var header = string.IsNullOrWhiteSpace(display.Name) ? GetDisplayEffectLabel(display.Effect) : display.Name;
+        if (ImGui.TreeNodeEx($"{header}###display_header"))
+        {
+            DrawDisplayEditor(display);
+            if (ImGui.Button("Remove Display"))
+            {
+                rule.Displays.RemoveAt(index);
+                ImGui.TreePop();
+                ImGui.PopID();
+                return;
+            }
+
+            ImGui.TreePop();
+        }
+
+        ImGui.PopID();
+    }
+
+    private static void DrawDisplayEditor(ExileAuraDisplay display)
+    {
+        ImGui.PushItemWidth(260);
+
+        var name = display.Name ?? string.Empty;
+        if (ImGui.InputText("Name", ref name, 120))
+        {
+            display.Name = name;
+        }
+
+        var effect = (int)display.Effect;
+        if (ImGui.Combo("Effect", ref effect, DisplayEffectOptions, DisplayEffectOptions.Length))
+        {
+            display.Effect = (ExileAuraDisplayEffect)effect;
+        }
+
+        var startPosition = (int)display.StartPosition;
+        if (ImGui.Combo("Start Position", ref startPosition, StartPositionOptions, StartPositionOptions.Length))
+        {
+            display.StartPosition = (ExileAuraStartPosition)startPosition;
+        }
+
+        DrawRangeNode("Offset X", display.OffsetX);
+        DrawRangeNode("Offset Y", display.OffsetY);
+        DrawRangeNode("Text Scale", display.TextScale);
+        ImGui.PopItemWidth();
+
+        var textColor = display.TextColor.ToImguiVec4();
+        if (ImGui.ColorEdit4("Text Color", ref textColor, ImGuiColorEditFlags.NoInputs))
+        {
+            display.TextColor = Color.FromArgb(
+                ClampByte(textColor.W * 255f),
+                ClampByte(textColor.X * 255f),
+                ClampByte(textColor.Y * 255f),
+                ClampByte(textColor.Z * 255f));
+        }
+    }
+
+    private static void DrawDisplayNameWarnings(ExileAuraRule rule)
+    {
+        if (rule.Displays.Any(display => string.IsNullOrWhiteSpace(display.Name)))
+        {
+            ImGui.TextColored(Color.Yellow.ToImguiVec4(), "Every display needs a name.");
+        }
+
+        var duplicateName = rule.Displays
+            .Where(display => !string.IsNullOrWhiteSpace(display.Name))
+            .GroupBy(display => display.Name, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(duplicateName))
+        {
+            ImGui.TextColored(Color.Yellow.ToImguiVec4(), $"Display name '{duplicateName}' is duplicated.");
+        }
+    }
+
+    private static string GetNewDisplayName(ExileAuraRule rule)
+    {
+        var existing = rule.Displays
+            .Select(display => display.Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        for (var i = 1; i < 10000; i++)
+        {
+            var name = $"Display {i}";
+            if (!existing.Contains(name))
+            {
+                return name;
+            }
+        }
+
+        return Guid.NewGuid().ToString("N");
+    }
+
+    private static string GetDisplayEffectLabel(ExileAuraDisplayEffect effect)
+    {
+        var index = (int)effect;
+        return index >= 0 && index < DisplayEffectOptions.Length ? DisplayEffectOptions[index] : effect.ToString();
+    }
+
     private void DrawCondition(ExileAuraRule rule, RuleState state)
     {
         ImGui.TextUnformatted("Condition");
@@ -173,20 +310,32 @@ public sealed partial class ExileAurasModule
 
     private void DrawConditionStatus(ExileAuraRule rule, RuleState state)
     {
-        var (active, error) = _conditionCompiler.Evaluate(rule, state);
-        if (!string.IsNullOrWhiteSpace(error))
+        var evaluation = _conditionCompiler.Evaluate(rule, state);
+        if (!string.IsNullOrWhiteSpace(evaluation.Error))
         {
-            ImGui.TextColored(Color.Red.ToImguiVec4(), error);
+            ImGui.TextColored(Color.Red.ToImguiVec4(), evaluation.Error);
             return;
         }
 
-        ImGui.TextColored((active ? Color.Lime : Color.Yellow).ToImguiVec4(), active ? "Aura is active." : "Aura is idle.");
+        ImGui.TextColored((evaluation.Active ? Color.Lime : Color.Yellow).ToImguiVec4(), evaluation.Active ? "Aura is active." : "Aura is idle.");
     }
 
     private static void DrawRangeNode(string label, RangeNode<int> node)
     {
         var value = node.Value;
         if (ImGui.SliderInt($"##{label}", ref value, node.Min, node.Max))
+        {
+            node.Value = value;
+        }
+
+        ImGui.SameLine();
+        ImGui.TextUnformatted(label);
+    }
+
+    private static void DrawRangeNode(string label, RangeNode<float> node)
+    {
+        var value = node.Value;
+        if (ImGui.SliderFloat($"##{label}", ref value, node.Min, node.Max, "%.3f"))
         {
             node.Value = value;
         }

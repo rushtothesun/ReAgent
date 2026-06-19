@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using ExileCore2.Shared;
+using ExileCore2.Shared.Helpers;
 using ImGuiNET;
 using ReAgent.State;
 
@@ -42,10 +43,10 @@ public sealed partial class ExileAurasModule
 
         foreach (var rule in EnumerateExileAuraRules(profile, state))
         {
-            var (active, error) = _conditionCompiler.Evaluate(rule, state);
-            if (active)
+            var evaluation = _conditionCompiler.Evaluate(rule, state);
+            if (evaluation.Active)
             {
-                _displayEntries.Add(new ExileAuraDisplayEntry(rule, true, error));
+                _displayEntries.Add(new ExileAuraDisplayEntry(rule, true, evaluation.Error, evaluation.Displays));
             }
         }
     }
@@ -56,8 +57,8 @@ public sealed partial class ExileAurasModule
             ? EnumerateExileAuraRules(profile, state)
                 .Select(rule =>
                 {
-                    var (active, error) = _conditionCompiler.Evaluate(rule, state);
-                    return new ExileAuraDisplayEntry(rule, active, error);
+                    var evaluation = _conditionCompiler.Evaluate(rule, state);
+                    return new ExileAuraDisplayEntry(rule, evaluation.Active, evaluation.Error, evaluation.Displays);
                 })
                 .ToList()
             : _displayEntries;
@@ -70,7 +71,7 @@ public sealed partial class ExileAurasModule
 
         foreach (var entry in entries)
         {
-            DrawAura(entry);
+            DrawAura(entry, state);
         }
     }
 
@@ -83,7 +84,7 @@ public sealed partial class ExileAurasModule
             .Select(rule => rule.ExileAura);
     }
 
-    private void DrawAura(ExileAuraDisplayEntry entry)
+    private void DrawAura(ExileAuraDisplayEntry entry, RuleState state)
     {
         var rule = entry.Rule;
         var position = new Vector2(rule.PositionX.Value, rule.PositionY.Value);
@@ -98,6 +99,10 @@ public sealed partial class ExileAurasModule
         }
 
         DrawAuraIcon(entry, position, iconSize);
+        if (entry.Active)
+        {
+            DrawTextDisplays(entry, state, position, iconSize);
+        }
     }
 
     private void DrawUnlockedBounds(ExileAuraRule rule, ExileAuraDisplayEntry entry, Vector2 position, Vector2 boundsSize)
@@ -275,6 +280,72 @@ public sealed partial class ExileAurasModule
 
         _registeredTextureKeys.Remove(textureKey);
         return false;
+    }
+
+    private void DrawTextDisplays(ExileAuraDisplayEntry entry, RuleState state, Vector2 iconPosition, float iconSize)
+    {
+        foreach (var runtimeDisplay in entry.Displays.Where(display => display.Enabled))
+        {
+            var text = BuildDisplayText(runtimeDisplay.Display, entry.Rule, state);
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                continue;
+            }
+
+            using (_plugin.Graphics.SetTextScale(runtimeDisplay.Display.TextScale.Value))
+            {
+                var textSize = _plugin.Graphics.MeasureText(text);
+                var textPosition = ResolveDisplayTextPosition(runtimeDisplay.Display, iconPosition, iconSize, textSize);
+                DrawTextWithBackground(text, textPosition, runtimeDisplay.Display.TextColor, Color.FromArgb(190, 0, 0, 0));
+            }
+        }
+    }
+
+    private static string BuildDisplayText(ExileAuraDisplay display, ExileAuraRule rule, RuleState state)
+    {
+        if (string.IsNullOrWhiteSpace(rule.SourceName))
+        {
+            return "";
+        }
+
+        var rows = state.Buffs.AllBuffs
+            .Where(buff => string.Equals(buff.Name, rule.SourceName, StringComparison.Ordinal))
+            .ToList();
+
+        if (rows.Count == 0)
+        {
+            return "";
+        }
+
+        return display.Effect switch
+        {
+            ExileAuraDisplayEffect.ShowTimer => FormatTimer(rows.Select(x => (float)x.TimeLeft).Where(IsFiniteTimer).DefaultIfEmpty(float.PositiveInfinity).Min()),
+            ExileAuraDisplayEffect.ShowCharges => rows.Max(x => x.Charges).ToString(),
+            ExileAuraDisplayEffect.ShowInstanceCount => rows.Count.ToString(),
+            ExileAuraDisplayEffect.ShowStack => rows.Max(x => x.Stacks).ToString(),
+            _ => ""
+        };
+    }
+
+    private static Vector2 ResolveDisplayTextPosition(ExileAuraDisplay display, Vector2 iconPosition, float iconSize, Vector2 textSize)
+    {
+        var position = display.StartPosition switch
+        {
+            ExileAuraStartPosition.Top => new Vector2(iconPosition.X + (iconSize - textSize.X) / 2f, iconPosition.Y - textSize.Y),
+            ExileAuraStartPosition.Left => new Vector2(iconPosition.X - textSize.X, iconPosition.Y + (iconSize - textSize.Y) / 2f),
+            ExileAuraStartPosition.Right => new Vector2(iconPosition.X + iconSize, iconPosition.Y + (iconSize - textSize.Y) / 2f),
+            ExileAuraStartPosition.Center => new Vector2(iconPosition.X + (iconSize - textSize.X) / 2f, iconPosition.Y + (iconSize - textSize.Y) / 2f),
+            _ => new Vector2(iconPosition.X + (iconSize - textSize.X) / 2f, iconPosition.Y + iconSize - textSize.Y)
+        };
+
+        return position + new Vector2(display.OffsetX.Value, display.OffsetY.Value);
+    }
+
+    private void DrawTextWithBackground(string text, Vector2 position, Color textColor, Color backgroundColor)
+    {
+        var textSize = _plugin.Graphics.MeasureText(text);
+        _plugin.Graphics.DrawBox(position, position + textSize, backgroundColor);
+        _plugin.Graphics.DrawText(text, position, textColor);
     }
 
     private bool IsTextureRegistered(string textureKey)

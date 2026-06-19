@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using System.Reflection;
 using System.Reflection.Metadata;
@@ -16,7 +17,7 @@ namespace ReAgent.ExileAuras;
 
 internal sealed class ExileAuraConditionCompiler
 {
-    private delegate T ScriptFunc<T>(RuleState State);
+    private delegate T ScriptFunc<T>(RuleState State, Func<string, ExileAuraDisplayRuntime> Display);
 
     private static readonly InteractiveAssemblyLoader Loader;
     private static readonly PortableExecutableReference MetadataReference;
@@ -51,11 +52,17 @@ internal sealed class ExileAuraConditionCompiler
             "ExileCore2.PoEMemory", "ExileCore2.PoEMemory.FilesInMemory",
             "GameOffsets2", "GameOffsets2.Native");
 
-    public (bool Active, string Error) Evaluate(ExileAuraRule rule, RuleState state)
+    public ExileAuraEvaluation Evaluate(ExileAuraRule rule, RuleState state)
     {
+        var displays = CreateDisplayStates(rule, out var displayError);
+        if (!string.IsNullOrWhiteSpace(displayError))
+        {
+            return new ExileAuraEvaluation(false, displayError, displays);
+        }
+
         if (string.IsNullOrWhiteSpace(rule.ConditionSource))
         {
-            return (false, "");
+            return new ExileAuraEvaluation(false, "", displays);
         }
 
         var key = $"{rule.Id}:{rule.ConditionSource}";
@@ -68,17 +75,57 @@ internal sealed class ExileAuraConditionCompiler
         var condition = lazy.Value;
         if (!string.IsNullOrWhiteSpace(condition.Error))
         {
-            return (false, condition.Error);
+            return new ExileAuraEvaluation(false, condition.Error, displays);
         }
 
         try
         {
-            return (condition.Func?.Invoke(state) == true, "");
+            var lookup = displays
+                .Where(x => !string.IsNullOrWhiteSpace(x.Name))
+                .ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
+            ExileAuraDisplayRuntime Display(string name)
+            {
+                if (lookup.TryGetValue(name, out var display))
+                {
+                    return display;
+                }
+
+                throw new KeyNotFoundException($"Display '{name}' was not found on this rule.");
+            }
+
+            return new ExileAuraEvaluation(condition.Func?.Invoke(state, Display) == true, "", displays);
         }
         catch (Exception ex)
         {
-            return (false, $"Exception while evaluating: {ex.Message}");
+            return new ExileAuraEvaluation(false, $"Exception while evaluating: {ex.Message}", displays);
         }
+    }
+
+    private static List<ExileAuraDisplayRuntime> CreateDisplayStates(ExileAuraRule rule, out string error)
+    {
+        error = "";
+        var displays = (rule.Displays ?? [])
+            .Select(display => new ExileAuraDisplayRuntime(display))
+            .ToList();
+
+        var unnamed = displays.FirstOrDefault(x => string.IsNullOrWhiteSpace(x.Name));
+        if (unnamed != null)
+        {
+            error = "Every display needs a name.";
+            return displays;
+        }
+
+        var duplicateName = displays
+            .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(duplicateName))
+        {
+            error = $"Display name '{duplicateName}' is used more than once on this rule.";
+        }
+
+        return displays;
     }
 
     private static CompiledCondition Compile(string source)
@@ -86,7 +133,7 @@ internal sealed class ExileAuraConditionCompiler
         try
         {
             var func = DelegateCompiler.CompileDelegate<ScriptFunc<bool>>(source, ScriptOptions, CreateAlc());
-            return new CompiledCondition(state => func(state), "");
+            return new CompiledCondition((state, display) => func(state, display), "");
         }
         catch (Exception ex)
         {
@@ -101,5 +148,7 @@ internal sealed class ExileAuraConditionCompiler
         return assemblyLoadContext;
     }
 
-    private sealed record CompiledCondition(Func<RuleState, bool> Func, string Error);
+    private sealed record CompiledCondition(Func<RuleState, Func<string, ExileAuraDisplayRuntime>, bool> Func, string Error);
 }
+
+internal sealed record ExileAuraEvaluation(bool Active, string Error, IReadOnlyCollection<ExileAuraDisplayRuntime> Displays);
