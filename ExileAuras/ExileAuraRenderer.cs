@@ -76,10 +76,10 @@ public sealed partial class ExileAurasModule
         }
     }
 
-    private static IEnumerable<(RuleGroup Group, ExileAuraRule Rule)> EnumerateExileAuraRules(Profile profile, RuleState state)
+    private IEnumerable<(RuleGroup Group, ExileAuraRule Rule)> EnumerateExileAuraRules(Profile profile, RuleState state)
     {
         return profile.Groups
-            .Where(group => group.ShouldEvaluate(state))
+            .Where(group => Settings.Unlocked.Value ? group.ShouldEvaluateArea(state) : group.ShouldEvaluate(state))
             .SelectMany(group => group.Rules.Select(rule => (Group: group, Rule: rule)))
             .Where(rule => rule.Rule.Kind == RuleKind.ExileAura && rule.Rule.ExileAura != null)
             .Select(rule => (rule.Group, rule.Rule.ExileAura));

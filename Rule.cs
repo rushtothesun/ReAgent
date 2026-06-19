@@ -3,9 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Dynamic.Core;
 using System.Numerics;
-using System.Reflection;
-using System.Reflection.Metadata;
-using System.Runtime.Loader;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Forms;
@@ -34,35 +31,6 @@ public class Rule
     private static readonly ParsingConfig ParsingConfig = new ParsingConfig()
         { AllowNewToEvaluateAnyType = true, ResolveTypesBySimpleName = true, CustomTypeProvider = new CustomDynamicLinqCustomTypeProvider() };
 
-    static Rule()
-    {
-        unsafe
-        {
-            Assembly.GetExecutingAssembly().TryGetRawMetadata(out byte* blob, out int length);
-            var moduleMetadata = ModuleMetadata.CreateFromMetadata((IntPtr)blob, length);
-            var assemblyMetadata = AssemblyMetadata.Create(moduleMetadata);
-            metadataReference = assemblyMetadata.GetReference();
-            loader = new InteractiveAssemblyLoader();
-            loader.RegisterDependency(typeof(ReAgent).Assembly);
-        }
-    }
-
-    private ScriptOptions ScriptOptions => ScriptOptions.Default
-        .AddReferences(
-            typeof(Vector2).Assembly,
-            typeof(GameStat).Assembly,
-            typeof(Core).Assembly)
-        .AddReferences(typeof(Keys).Assembly)
-        .AddReferences(metadataReference)
-        .AddImports(
-            "System.Collections.Generic", "System.Linq", "System.Numerics", "System.Windows.Forms", "System",
-            "ReAgent", "ReAgent.State", "ReAgent.SideEffects",
-            "ExileCore2", "ExileCore2.Shared", "ExileCore2.Shared.Enums",
-            "ExileCore2.Shared.Helpers", "ExileCore2.PoEMemory.Components", "ExileCore2.PoEMemory.MemoryObjects",
-            "ExileCore2.PoEMemory", "ExileCore2.PoEMemory.FilesInMemory",
-            "GameOffsets2", "GameOffsets2.Native"
-        );
-
     public string RuleSource;
     public RuleActionType Type = RuleActionType.Key;
     public RuleKind Kind = RuleKind.ReAgent;
@@ -88,8 +56,6 @@ public class Rule
     private Lazy<(Func<RuleState, IEnumerable<ISideEffect>> Func, string Exception)> _compilationResult;
     private string _lastException;
     private ulong _exceptionCounter;
-    private static readonly InteractiveAssemblyLoader loader;
-    private static readonly PortableExecutableReference metadataReference;
     private ControllerKey _controllerPickerKey = ControllerKey.None;
     private ControllerKey _controllerPickerModifierKey = ControllerKey.None;
 
@@ -400,20 +366,29 @@ public class Rule
             {
                 case RuleActionType.Key:
                 {
-                    var @delegate = DelegateCompiler.CompileDelegate<ScriptFunc<bool>>(RuleSource, ScriptOptions, CreateAlc());
+                    var @delegate = DelegateCompiler.CompileDelegate<ScriptFunc<bool>>(
+                        RuleSource,
+                        ScriptCompilerSupport.ScriptOptions,
+                        ScriptCompilerSupport.CreateAssemblyLoadContext("ReAgentRule"));
                     return (s => @delegate(s)
                         ? [new PressKeySideEffect(GetActiveKey(s))]
                         : [], null);
                 }
                 case RuleActionType.SingleSideEffect:
                 {
-                    var @delegate = DelegateCompiler.CompileDelegate<ScriptFunc<ISideEffect>>(RuleSource, ScriptOptions, CreateAlc());
+                    var @delegate = DelegateCompiler.CompileDelegate<ScriptFunc<ISideEffect>>(
+                        RuleSource,
+                        ScriptCompilerSupport.ScriptOptions,
+                        ScriptCompilerSupport.CreateAssemblyLoadContext("ReAgentRule"));
                     return (s => @delegate(s) switch { { } sideEffect => [sideEffect], _ => Enumerable.Empty<ISideEffect>() },
                         null);
                 }
                 case RuleActionType.MultipleSideEffects:
                 {
-                    var @delegate = DelegateCompiler.CompileDelegate<ScriptFunc<IEnumerable<ISideEffect>>>(RuleSource, ScriptOptions, CreateAlc());
+                    var @delegate = DelegateCompiler.CompileDelegate<ScriptFunc<IEnumerable<ISideEffect>>>(
+                        RuleSource,
+                        ScriptCompilerSupport.ScriptOptions,
+                        ScriptCompilerSupport.CreateAssemblyLoadContext("ReAgentRule"));
                     return (s => @delegate(s) switch { { } sideEffects => sideEffects, _ => Enumerable.Empty<ISideEffect>() }, null);
                 }
                 default:
@@ -424,13 +399,6 @@ public class Rule
         {
             return (null, $"Expression compilation failed: {ex.Message}");
         }
-    }
-
-    private static AssemblyLoadContext CreateAlc()
-    {
-        var assemblyLoadContext = new AssemblyLoadContext($"bbb{Guid.NewGuid()}", true);
-        assemblyLoadContext.Resolving += (context, name) => name.Name == "ReAgent" ? Assembly.GetExecutingAssembly() : null;
-        return assemblyLoadContext;
     }
 
     public IList<ISideEffect> Evaluate(RuleState state)

@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Numerics;
 using ExileCore2;
 using ExileCore2.Shared.Helpers;
 using ImGuiNET;
@@ -15,6 +16,7 @@ public class RuleGroup
 {
     private bool _expand;
     private int _deleteIndex = -1;
+    private readonly GroupConditionCompiler _groupConditionCompiler = new();
 
     public List<Rule> Rules = new();
     public RuleKind Kind = RuleKind.ReAgent;
@@ -24,6 +26,9 @@ public class RuleGroup
     public bool EnabledInPeacefulAreas;
     public bool EnabledInMaps = true;
     public bool MoveTogether;
+    public bool UseGroupCondition;
+    public string GroupConditionName = "Group Condition";
+    public string GroupConditionSource = "return true;";
     public string Name;
 
     public RuleGroup(string name, RuleKind kind = RuleKind.ReAgent)
@@ -93,6 +98,8 @@ public class RuleGroup
             ImGui.Checkbox("Move Together", ref MoveTogether);
         }
 
+        DrawGroupCondition(state);
+
         using var groupReg = state?.InternalState.SetCurrentGroup(this);
         for (var i = 0; i < Rules.Count; i++)
         {
@@ -160,39 +167,6 @@ public class RuleGroup
             Rules.Add(CreateRule());
         }
 
-        if (ImGui.TreeNode("State"))
-        {
-            var flags = state.InternalState.CurrentGroupState.Flags;
-            var timers = state.InternalState.CurrentGroupState.Timers;
-            var numbers = state.InternalState.CurrentGroupState.Numbers;
-            if ((flags.Any() || timers.Any() || numbers.Any()) && ImGui.Button("Clear"))
-            {
-                flags.Clear();
-                timers.Clear();
-                numbers.Clear();
-            }
-
-            ImGui.Text("Timers:");
-            foreach (var (name, timer) in timers)
-            {
-                ImGui.TextColored(timer.IsRunning ? Color.Green.ToImguiVec4() : Color.Yellow.ToImguiVec4(), $"{name}: {timer.Elapsed.TotalSeconds}");
-            }
-
-            ImGui.Text("Flags:");
-            foreach (var (name, flag) in flags)
-            {
-                ImGui.TextColored(flag ? Color.Green.ToImguiVec4() : Color.Yellow.ToImguiVec4(), name);
-            }
-
-            ImGui.Text("Numbers:");
-            foreach (var (name, value) in numbers)
-            {
-                ImGui.TextColored(Color.Green.ToImguiVec4(), $"{name}: {value}");
-            }
-
-            ImGui.TreePop();
-        }
-
         if (_deleteIndex != -1)
         {
             ImGui.OpenPopup("RuleDeleteConfirmation");
@@ -211,6 +185,11 @@ public class RuleGroup
     }
 
     public bool ShouldEvaluate(RuleState state)
+    {
+        return ShouldEvaluateArea(state) && ShouldEvaluateGroupCondition(state).Active;
+    }
+
+    public bool ShouldEvaluateArea(RuleState state)
     {
         return Enabled &&
                (state.IsInHideout, state.IsInTown, state.IsInPeacefulArea) switch
@@ -248,6 +227,53 @@ public class RuleGroup
         var movedItem = Rules[sourceIndex];
         Rules.RemoveAt(sourceIndex);
         Rules.Insert(targetIndex, movedItem);
+    }
+
+    private void DrawGroupCondition(RuleState state)
+    {
+        if (ImGui.Checkbox("Use Group Condition", ref UseGroupCondition) &&
+            string.IsNullOrWhiteSpace(GroupConditionSource))
+        {
+            GroupConditionSource = "return true;";
+        }
+
+        if (!UseGroupCondition)
+        {
+            return;
+        }
+
+        ImGui.PushItemWidth(260);
+        ImGui.InputText("Condition Name", ref GroupConditionName, 120);
+        ImGui.PopItemWidth();
+
+        var source = GroupConditionSource ?? string.Empty;
+        if (ImGui.InputTextMultiline(
+                "##groupConditionSource",
+                ref source,
+                10000,
+                new Vector2(ImGui.GetContentRegionAvail().X, ImGui.CalcTextSize($"^{source}_").Y + ImGui.GetTextLineHeight())))
+        {
+            GroupConditionSource = source;
+        }
+
+        var result = ShouldEvaluateGroupCondition(state);
+        if (!string.IsNullOrWhiteSpace(result.Error))
+        {
+            ImGui.TextColored(Color.Red.ToImguiVec4(), result.Error);
+            return;
+        }
+
+        ImGui.TextColored((result.Active ? Color.Lime : Color.Yellow).ToImguiVec4(), result.Active ? "Group condition is true." : "Group condition is false.");
+    }
+
+    private GroupConditionEvaluation ShouldEvaluateGroupCondition(RuleState state)
+    {
+        if (!UseGroupCondition)
+        {
+            return new GroupConditionEvaluation(true, "");
+        }
+
+        return _groupConditionCompiler.Evaluate(GroupConditionSource, state);
     }
 
     private Rule CreateRule()
