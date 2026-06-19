@@ -3,13 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using LibBundle3.Records;
-using LibBundledGGPK3;
-using Pfim;
-using SixLabors.ImageSharp.Formats.Png;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
-using Image = SixLabors.ImageSharp.Image;
 
 namespace ReAgent.ExileAuras;
 
@@ -19,17 +12,6 @@ public sealed class ExileAuraIconCache
     private readonly Dictionary<string, ExileAuraIconCacheEntry> _entries = new(StringComparer.OrdinalIgnoreCase);
     private readonly Queue<ExtractRequest> _pending = new();
     private bool _workerRunning;
-
-    public IReadOnlyCollection<ExileAuraIconCacheEntry> Snapshot()
-    {
-        lock (_sync)
-        {
-            return _entries.Values
-                .OrderBy(x => x.State)
-                .ThenBy(x => x.GgpkPath, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-        }
-    }
 
     public ExileAuraIconCacheEntry Queue(string ddsFile, string contentGgpkPath, string cacheRoot)
     {
@@ -69,96 +51,6 @@ public sealed class ExileAuraIconCache
 
             return queued;
         }
-    }
-
-    public static AssetExtractionResult ExtractAssets(
-        IReadOnlyCollection<AssetExtractionRequest> requests,
-        string contentGgpkPath,
-        string outputDirectory)
-    {
-        if (requests.Count == 0)
-        {
-            return new AssetExtractionResult(0, 0, 0, "No assets requested.");
-        }
-
-        if (string.IsNullOrWhiteSpace(contentGgpkPath))
-        {
-            return new AssetExtractionResult(requests.Count, 0, 0, "Content.ggpk path is empty.");
-        }
-
-        if (!File.Exists(contentGgpkPath))
-        {
-            return new AssetExtractionResult(requests.Count, 0, 0, $"Content.ggpk was not found: {contentGgpkPath}");
-        }
-
-        Directory.CreateDirectory(outputDirectory);
-
-        var pendingRequests = new List<AssetExtractionRequest>();
-        var skipped = 0;
-        foreach (var request in requests)
-        {
-            var outputPath = GetSafeAssetOutputPath(outputDirectory, request.OutputPngName);
-            if (File.Exists(outputPath))
-            {
-                skipped++;
-                continue;
-            }
-
-            pendingRequests.Add(request);
-        }
-
-        if (pendingRequests.Count == 0)
-        {
-            return new AssetExtractionResult(requests.Count, 0, skipped, $"Skipped {skipped}/{requests.Count} assets; all frames already exist.");
-        }
-
-        using var ggpk = OpenBundledGgpk(contentGgpkPath);
-        var files = new List<FileRecord>();
-        var requestByPath = new Dictionary<string, AssetExtractionRequest>(StringComparer.OrdinalIgnoreCase);
-        var missing = new List<string>();
-
-        foreach (var request in pendingRequests)
-        {
-            var normalizedPath = NormalizeDdsPath(request.DdsPath);
-            if (string.IsNullOrWhiteSpace(normalizedPath) || !ggpk.Index.TryGetFile(normalizedPath, out var file))
-            {
-                missing.Add(request.DdsPath);
-                continue;
-            }
-
-            files.Add(file);
-            requestByPath[normalizedPath] = request;
-        }
-
-        if (files.Count == 0)
-        {
-            return new AssetExtractionResult(requests.Count, 0, skipped, "No requested assets were found.");
-        }
-
-        var written = 0;
-        var extractedCount = LibBundle3.Index.Extract(files, (record, content) =>
-        {
-            if (content == null || !requestByPath.TryGetValue(record.Path, out var request))
-            {
-                return false;
-            }
-
-            var outputPath = GetSafeAssetOutputPath(outputDirectory, request.OutputPngName);
-            ConvertDdsToPng(content.Value.ToArray(), outputPath, request.TargetWidth, request.TargetHeight);
-            written++;
-            return false;
-        });
-
-        var message = missing.Count == 0
-            ? $"Extracted {written}, skipped {skipped}, requested {requests.Count} assets."
-            : $"Extracted {written}, skipped {skipped}, requested {requests.Count} assets. Missing: {string.Join(", ", missing)}";
-
-        if (extractedCount != files.Count)
-        {
-            message += $" Extract returned {extractedCount}/{files.Count}.";
-        }
-
-        return new AssetExtractionResult(requests.Count, written, skipped, message);
     }
 
     private void ProcessQueue()
@@ -203,7 +95,7 @@ public sealed class ExileAuraIconCache
             Directory.CreateDirectory(Path.GetDirectoryName(request.DdsOutputPath)!);
             Directory.CreateDirectory(Path.GetDirectoryName(request.PngOutputPath)!);
 
-            using var ggpk = OpenBundledGgpk(request.ContentGgpkPath);
+            using var ggpk = ExileAuraGgpk.Open(request.ContentGgpkPath);
             if (!ggpk.Index.TryGetFile(request.GgpkPath, out var file))
             {
                 return ExileAuraIconCacheEntry.MissingPath(request.GgpkPath, request.DdsOutputPath, request.PngOutputPath);
@@ -219,7 +111,7 @@ public sealed class ExileAuraIconCache
 
                 var bytes = content.Value.ToArray();
                 File.WriteAllBytes(request.DdsOutputPath, bytes);
-                ConvertDdsToPng(bytes, request.PngOutputPath);
+                ExileAuraDdsConverter.ConvertToPng(bytes, request.PngOutputPath);
                 TryDeleteFile(request.DdsOutputPath);
                 wroteFile = true;
                 return false;
@@ -250,35 +142,6 @@ public sealed class ExileAuraIconCache
         catch
         {
         }
-    }
-
-    private static void ConvertDdsToPng(byte[] ddsBytes, string outputPath, int targetWidth = 0, int targetHeight = 0)
-    {
-        using var stream = new MemoryStream(ddsBytes);
-        using var image = Dds.Create(stream, new PfimConfig());
-
-        switch (image.Format)
-        {
-            case ImageFormat.Rgba32:
-                SavePixelDataAsPng<Bgra32>(image, outputPath, 4, targetWidth, targetHeight);
-                break;
-            case ImageFormat.Rgb24:
-                SavePixelDataAsPng<Bgr24>(image, outputPath, 3, targetWidth, targetHeight);
-                break;
-            case ImageFormat.Rgb8:
-                SavePixelDataAsPng<L8>(image, outputPath, 1, targetWidth, targetHeight);
-                break;
-            default:
-                throw new NotSupportedException($"Unsupported DDS pixel format: {image.Format}");
-        }
-    }
-
-    private static BundledGGPK OpenBundledGgpk(string ggpkPath)
-    {
-        var stream = new FileStream(ggpkPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        var ggpk = new BundledGGPK(stream, leaveOpen: false, parsePathsInIndex: false);
-        ggpk.Index.ParsePaths();
-        return ggpk;
     }
 
     public static string NormalizeDdsPath(string ddsFile)
@@ -313,60 +176,16 @@ public sealed class ExileAuraIconCache
     {
         var root = Path.GetFullPath(cacheRoot);
         var outputName = CreateFlatOutputName(normalizedPath);
-        var ddsOutputPath = Path.GetFullPath(Path.Combine(root, "dds", outputName + ".dds"));
-        var pngOutputPath = Path.GetFullPath(Path.Combine(root, "png", outputName + ".png"));
+        var ddsOutputPath = Path.GetFullPath(Path.Combine(root, outputName + ".dds"));
+        var pngOutputPath = Path.GetFullPath(Path.Combine(root, outputName + ".png"));
 
-        if (!ddsOutputPath.StartsWith(root, StringComparison.OrdinalIgnoreCase) ||
-            !pngOutputPath.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+        if (!ExileAuraPaths.IsInsideDirectory(root, ddsOutputPath) ||
+            !ExileAuraPaths.IsInsideDirectory(root, pngOutputPath))
         {
             throw new InvalidOperationException("DDS output path escaped the cache directory.");
         }
 
         return (ddsOutputPath, pngOutputPath);
-    }
-
-    private static string GetSafeAssetOutputPath(string outputDirectory, string outputName)
-    {
-        var root = Path.GetFullPath(outputDirectory);
-        var outputPath = Path.GetFullPath(Path.Combine(root, outputName));
-        if (!outputPath.StartsWith(root, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException("Asset output path escaped the output directory.");
-        }
-
-        return outputPath;
-    }
-
-    private static void SavePixelDataAsPng<TPixel>(IImage image, string outputPath, int bytesPerPixel, int targetWidth = 0, int targetHeight = 0)
-        where TPixel : unmanaged, IPixel<TPixel>
-    {
-        var pixelData = GetTightlyPackedPixelData(image, bytesPerPixel);
-        using var png = Image.LoadPixelData<TPixel>(pixelData, image.Width, image.Height);
-        if (targetWidth > 0 && targetHeight > 0 && (png.Width != targetWidth || png.Height != targetHeight))
-        {
-            png.Mutate(x => x.Resize(targetWidth, targetHeight));
-        }
-
-        using var output = File.Create(outputPath);
-        png.Save(output, new PngEncoder());
-    }
-
-    private static byte[] GetTightlyPackedPixelData(IImage image, int bytesPerPixel)
-    {
-        var rowLength = image.Width * bytesPerPixel;
-        var outputLength = rowLength * image.Height;
-        if (image.Stride == rowLength && image.DataLen >= outputLength)
-        {
-            return image.Data.Length == outputLength ? image.Data : image.Data.Take(outputLength).ToArray();
-        }
-
-        var data = new byte[outputLength];
-        for (var y = 0; y < image.Height; y++)
-        {
-            Buffer.BlockCopy(image.Data, y * image.Stride, data, y * rowLength, rowLength);
-        }
-
-        return data;
     }
 
     private static string CreateFlatOutputName(string normalizedPath)
@@ -434,10 +253,6 @@ public sealed record ExileAuraIconCacheEntry(
     public static ExileAuraIconCacheEntry MissingPath(string path, string ddsOutputPath, string pngOutputPath) => new(path, ddsOutputPath, pngOutputPath, ExileAuraIconCacheState.MissingPath, "");
     public static ExileAuraIconCacheEntry Failed(string path, string ddsOutputPath, string pngOutputPath, string error) => new(path, ddsOutputPath, pngOutputPath, ExileAuraIconCacheState.Failed, error);
 }
-
-public sealed record AssetExtractionRequest(string DdsPath, string OutputPngName, int TargetWidth = 0, int TargetHeight = 0);
-
-public sealed record AssetExtractionResult(int Requested, int Written, int Skipped, string Message);
 
 public enum ExileAuraIconCacheState
 {

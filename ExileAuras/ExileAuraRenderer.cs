@@ -71,7 +71,7 @@ public sealed partial class ExileAurasModule
 
         foreach (var entry in entries)
         {
-            DrawAura(entry, state);
+            DrawAura(entry);
         }
     }
 
@@ -84,7 +84,7 @@ public sealed partial class ExileAurasModule
             .Select(rule => rule.ExileAura);
     }
 
-    private void DrawAura(ExileAuraDisplayEntry entry, RuleState state)
+    private void DrawAura(ExileAuraDisplayEntry entry)
     {
         var rule = entry.Rule;
         var position = new Vector2(rule.PositionX.Value, rule.PositionY.Value);
@@ -101,7 +101,7 @@ public sealed partial class ExileAurasModule
         DrawAuraIcon(entry, position, iconSize);
         if (entry.Active)
         {
-            DrawTextDisplays(entry, state, position, iconSize);
+            DrawTextDisplays(entry, position, iconSize);
         }
     }
 
@@ -205,7 +205,7 @@ public sealed partial class ExileAurasModule
 
         if (!iconWasDrawn)
         {
-            DrawCenteredText(Initials(rule.Name), position, iconRectSize, Color.White);
+            DrawCenteredText(GetInitials(rule.Name), position, iconRectSize, Color.White);
         }
     }
 
@@ -234,7 +234,7 @@ public sealed partial class ExileAurasModule
 
     private bool TryEnsureRuleIconRegistered(ExileAuraRule rule, out string textureKey)
     {
-        textureKey = string.IsNullOrWhiteSpace(rule.IconTextureKey) ? CreateTextureKey(rule) : rule.IconTextureKey;
+        textureKey = string.IsNullOrWhiteSpace(rule.IconTextureKey) ? ExileAuraTextureKeys.Icon(rule) : rule.IconTextureKey;
         rule.IconTextureKey = textureKey;
 
         var iconPath = rule.Visual == ExileAuraVisualSource.ManualIcon ? rule.ManualIconPath : rule.ExtractedPngPath;
@@ -247,13 +247,13 @@ public sealed partial class ExileAurasModule
         layout = default;
 
         if (string.IsNullOrWhiteSpace(frameName) ||
-            string.Equals(frameName, "None", StringComparison.Ordinal) ||
-            !FrameLayouts.TryGetValue(frameName, out layout))
+            string.Equals(frameName, ExileAuraFrames.None, StringComparison.Ordinal) ||
+            !ExileAuraFrames.TryGetLayout(frameName, out layout))
         {
             return false;
         }
 
-        textureKey = CreateFrameTextureKey(frameName);
+        textureKey = ExileAuraTextureKeys.Frame(frameName);
         var framePath = Path.Combine(ResolveFramesDirectory(), layout.FileName);
         return File.Exists(framePath) && TryEnsureImageRegistered(textureKey, framePath);
     }
@@ -282,7 +282,7 @@ public sealed partial class ExileAurasModule
         return false;
     }
 
-    private void DrawTextDisplays(ExileAuraDisplayEntry entry, RuleState state, Vector2 iconPosition, float iconSize)
+    private void DrawTextDisplays(ExileAuraDisplayEntry entry, Vector2 iconPosition, float iconSize)
     {
         foreach (var runtimeDisplay in entry.Displays.Where(display => display.Enabled))
         {
@@ -356,5 +356,19 @@ public sealed partial class ExileAurasModule
             position.X + (size.X - textSize.X) / 2f,
             position.Y + (size.Y - textSize.Y) / 2f);
         _plugin.Graphics.DrawText(text, textPosition, color);
+    }
+
+    private static string GetInitials(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return "?";
+        }
+
+        var initials = string.Concat(text
+            .Split([' ', '_', '-'], StringSplitOptions.RemoveEmptyEntries)
+            .Take(2)
+            .Select(x => char.ToUpperInvariant(x[0])));
+        return string.IsNullOrWhiteSpace(initials) ? "?" : initials;
     }
 }

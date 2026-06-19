@@ -24,11 +24,21 @@ internal static class ExileAuraDisplayText
 
         return display.Effect switch
         {
-            ExileAuraDisplayEffect.ShowTimer => ExileAurasModule.FormatTimerForDisplay(rows.Select(x => (float)x.TimeLeft).Where(ExileAurasModule.IsFiniteTimerForDisplay).DefaultIfEmpty(float.PositiveInfinity).Min()),
+            ExileAuraDisplayEffect.ShowTimer => FormatTimer(rows.Select(x => (float)x.TimeLeft).Where(IsFiniteTimer).DefaultIfEmpty(float.PositiveInfinity).Min()),
             ExileAuraDisplayEffect.ShowCharges => rows.Max(x => x.Charges).ToString(),
             ExileAuraDisplayEffect.ShowInstanceCount => rows.Count.ToString(),
             ExileAuraDisplayEffect.ShowStack => rows.Max(x => x.Stacks).ToString(),
             _ => ""
         };
+    }
+
+    private static bool IsFiniteTimer(float timer)
+    {
+        return timer > 0f && timer < 9999f && !float.IsInfinity(timer) && !float.IsNaN(timer);
+    }
+
+    private static string FormatTimer(float timer)
+    {
+        return IsFiniteTimer(timer) ? $"{timer:0.0}s" : "";
     }
 }

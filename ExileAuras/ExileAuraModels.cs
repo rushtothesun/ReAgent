@@ -46,11 +46,6 @@ public sealed class ExileAuraRule
     public string IconTextureKey { get; set; } = "";
     public string ConditionSource { get; set; } = "false";
     public List<ExileAuraDisplay> Displays { get; set; } = [];
-
-    public bool ShouldSerializeIconStatus() => false;
-    public string IconStatus { get; set; } = "";
-    public bool ShouldSerializeIconStatusExpiresAtMs() => false;
-    public long IconStatusExpiresAtMs { get; set; }
 }
 
 public sealed class ExileAuraDisplay

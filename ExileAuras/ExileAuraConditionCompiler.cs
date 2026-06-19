@@ -22,7 +22,7 @@ internal sealed class ExileAuraConditionCompiler
     private static readonly InteractiveAssemblyLoader Loader;
     private static readonly PortableExecutableReference MetadataReference;
 
-    private readonly Dictionary<string, Lazy<CompiledCondition>> _conditions = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, CachedCondition> _conditions = new(StringComparer.Ordinal);
 
     static ExileAuraConditionCompiler()
     {
@@ -54,15 +54,15 @@ internal sealed class ExileAuraConditionCompiler
 
     public ExileAuraEvaluation Evaluate(ExileAuraRule rule, RuleState state)
     {
-        var displays = CreateDisplayStates(rule, out var displayError);
-        foreach (var display in displays)
-        {
-            display.Value = ExileAuraDisplayText.BuildDefaultText(display.Display, rule, state);
-        }
-
+        var displays = ExileAuraDisplayValidator.CreateDisplayStates(rule, out var displayError);
         if (!string.IsNullOrWhiteSpace(displayError))
         {
             return new ExileAuraEvaluation(false, displayError, displays);
+        }
+
+        foreach (var display in displays)
+        {
+            display.Value = ExileAuraDisplayText.BuildDefaultText(display.Display, rule, state);
         }
 
         if (string.IsNullOrWhiteSpace(rule.ConditionSource))
@@ -70,14 +70,7 @@ internal sealed class ExileAuraConditionCompiler
             return new ExileAuraEvaluation(false, "", displays);
         }
 
-        var key = $"{rule.Id}:{rule.ConditionSource}";
-        if (!_conditions.TryGetValue(key, out var lazy))
-        {
-            lazy = new Lazy<CompiledCondition>(() => Compile(rule.ConditionSource));
-            _conditions[key] = lazy;
-        }
-
-        var condition = lazy.Value;
+        var condition = GetCompiledCondition(rule);
         if (!string.IsNullOrWhiteSpace(condition.Error))
         {
             return new ExileAuraEvaluation(false, condition.Error, displays);
@@ -106,31 +99,37 @@ internal sealed class ExileAuraConditionCompiler
         }
     }
 
-    private static List<ExileAuraDisplayRuntime> CreateDisplayStates(ExileAuraRule rule, out string error)
+    public ExileAuraValidationResult Validate(ExileAuraRule rule)
     {
-        error = "";
-        var displays = (rule.Displays ?? [])
-            .Select(display => new ExileAuraDisplayRuntime(display))
-            .ToList();
-
-        var unnamed = displays.FirstOrDefault(x => string.IsNullOrWhiteSpace(x.Name));
-        if (unnamed != null)
+        var displayValidation = ExileAuraDisplayValidator.Validate(rule);
+        if (!displayValidation.Success)
         {
-            error = "Every display needs a name.";
-            return displays;
+            return displayValidation;
         }
 
-        var duplicateName = displays
-            .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
-            .Where(group => group.Count() > 1)
-            .Select(group => group.Key)
-            .FirstOrDefault();
-        if (!string.IsNullOrWhiteSpace(duplicateName))
+        if (string.IsNullOrWhiteSpace(rule.ConditionSource))
         {
-            error = $"Display name '{duplicateName}' is used more than once on this rule.";
+            return ExileAuraValidationResult.Ok();
         }
 
-        return displays;
+        var condition = GetCompiledCondition(rule);
+        return string.IsNullOrWhiteSpace(condition.Error)
+            ? ExileAuraValidationResult.Ok()
+            : ExileAuraValidationResult.Fail(condition.Error);
+    }
+
+    private CompiledCondition GetCompiledCondition(ExileAuraRule rule)
+    {
+        var source = rule.ConditionSource ?? string.Empty;
+        if (_conditions.TryGetValue(rule.Id, out var cached) &&
+            string.Equals(cached.Source, source, StringComparison.Ordinal))
+        {
+            return cached.Condition.Value;
+        }
+
+        var next = new CachedCondition(source, new Lazy<CompiledCondition>(() => Compile(source)));
+        _conditions[rule.Id] = next;
+        return next.Condition.Value;
     }
 
     private static CompiledCondition Compile(string source)
@@ -153,6 +152,7 @@ internal sealed class ExileAuraConditionCompiler
         return assemblyLoadContext;
     }
 
+    private sealed record CachedCondition(string Source, Lazy<CompiledCondition> Condition);
     private sealed record CompiledCondition(Func<RuleState, Func<string, ExileAuraDisplayRuntime>, bool> Func, string Error);
 }
 

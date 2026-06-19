@@ -14,38 +14,12 @@ public sealed partial class ExileAurasModule
 {
     private const long StatusVisibleMs = 7000;
 
-    private static readonly string[] FrameOptions =
-    [
-        "None",
-        "buff",
-        "charges",
-        "debuff",
-        "minionframe",
-        "nopausebuffframe"
-    ];
-
-    private static readonly AssetExtractionRequest[] PluginAssetRequests =
-    [
-        new("art/textures/interface/2d/2dart/uiimages/ingame/4k/buff.dds", "buff.png"),
-        new("art/textures/interface/2d/2dart/uiimages/ingame/4k/charges.dds", "charges.png"),
-        new("art/textures/interface/2d/2dart/uiimages/ingame/4k/debuff.dds", "debuff.png"),
-        new("art/textures/interface/2d/2dart/uiimages/ingame/4k/minionframe.dds", "minionframe.png"),
-        new("art/textures/interface/2d/2dart/uiimages/ingame/4k/nopausebuffframe.dds", "nopausebuffframe.png")
-    ];
-
-    private static readonly Dictionary<string, ExileAuraFrameLayout> FrameLayouts = new(StringComparer.Ordinal)
-    {
-        ["buff"] = new("buff.png", 132f, 132f, 0.625f, 0f, -4f),
-        ["charges"] = new("charges.png", 132f, 132f, 0.625f, 0f, -4f),
-        ["debuff"] = new("debuff.png", 132f, 132f, 0.625f, 0f, -4f),
-        ["nopausebuffframe"] = new("nopausebuffframe.png", 132f, 132f, 0.625f, 0f, -4f),
-        ["minionframe"] = new("minionframe.png", 136f, 132f, 0.625f, 0f, -4f)
-    };
-
     private readonly ReAgent _plugin;
     private readonly ExileAuraIconCache _iconCache = new();
     private readonly ExileAuraConditionCompiler _conditionCompiler = new();
     private readonly HashSet<string> _registeredTextureKeys = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ExileAuraIconStatus> _iconStatuses = new(StringComparer.Ordinal);
+    private readonly object _assetExtractionSync = new();
 
     private long _nextPollMs;
     private bool _assetExtractionRunning;
@@ -110,7 +84,7 @@ public sealed partial class ExileAurasModule
         }
 
         ImGui.SameLine(0f, 34f);
-        var extractionWasRunning = _assetExtractionRunning;
+        var extractionWasRunning = IsAssetExtractionRunning();
         if (extractionWasRunning)
         {
             ImGui.BeginDisabled();
@@ -126,9 +100,10 @@ public sealed partial class ExileAurasModule
             ImGui.EndDisabled();
         }
 
-        if (IsAssetExtractionStatusVisible() && ImGui.IsItemHovered())
+        var assetStatus = GetVisibleAssetExtractionStatus();
+        if (!string.IsNullOrWhiteSpace(assetStatus) && ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip(_assetExtractionStatus);
+            ImGui.SetTooltip(assetStatus);
         }
 
         ImGui.SameLine(0f, 34f);
@@ -145,9 +120,10 @@ public sealed partial class ExileAurasModule
         }
         ImGui.PopItemWidth();
 
-        if (IsAssetExtractionStatusVisible())
+        assetStatus = GetVisibleAssetExtractionStatus();
+        if (!string.IsNullOrWhiteSpace(assetStatus))
         {
-            ImGui.TextColored(Color.LightGreen.ToImguiVec4(), _assetExtractionStatus);
+            ImGui.TextColored(Color.LightGreen.ToImguiVec4(), assetStatus);
         }
     }
 
@@ -159,7 +135,7 @@ public sealed partial class ExileAurasModule
         }
 
         _autoDetectAttempted = true;
-        var detectedPath = TryAutoDetectContentGgpkPath();
+        var detectedPath = TryGetContentGgpkPath(GameController?.Window?.Process);
         if (!string.IsNullOrWhiteSpace(detectedPath))
         {
             Settings.ContentGgpkPath.Value = detectedPath;
@@ -169,17 +145,21 @@ public sealed partial class ExileAurasModule
     private string ForceAutoDetectContentGgpkPath()
     {
         _autoDetectAttempted = true;
-        return TryAutoDetectContentGgpkPath() ?? string.Empty;
+        return TryGetContentGgpkPath(GameController?.Window?.Process) ?? string.Empty;
     }
 
     private void QueuePluginAssetExtraction()
     {
-        if (_assetExtractionRunning)
+        lock (_assetExtractionSync)
         {
-            return;
+            if (_assetExtractionRunning)
+            {
+                return;
+            }
+
+            _assetExtractionRunning = true;
         }
 
-        _assetExtractionRunning = true;
         SetAssetExtractionStatus("Extracting frames...");
         var contentGgpkPath = ResolveContentGgpkPath();
         var framesDirectory = ResolveFramesDirectory();
@@ -188,7 +168,7 @@ public sealed partial class ExileAurasModule
         {
             try
             {
-                var result = ExileAuraIconCache.ExtractAssets(PluginAssetRequests, contentGgpkPath, framesDirectory);
+                var result = ExileAuraAssetExtractor.ExtractAssets(ExileAuraFrames.ExtractionRequests, contentGgpkPath, framesDirectory);
                 SetAssetExtractionStatus(result.Message);
             }
             catch (Exception ex)
@@ -197,7 +177,10 @@ public sealed partial class ExileAurasModule
             }
             finally
             {
-                _assetExtractionRunning = false;
+                lock (_assetExtractionSync)
+                {
+                    _assetExtractionRunning = false;
+                }
             }
         });
     }
@@ -212,11 +195,11 @@ public sealed partial class ExileAurasModule
         var normalizedPath = ExileAuraIconCache.NormalizeDdsPath(ddsFile);
         if (string.IsNullOrWhiteSpace(normalizedPath))
         {
-            SetIconStatus(rule, "No icon DDS path is available.");
+            SetIconStatus(rule, ExileAuraIconStatusKind.Failed, "No icon DDS path is available.");
             return;
         }
 
-        var textureKey = CreateTextureKey(rule);
+        var textureKey = ExileAuraTextureKeys.Icon(rule);
         var (_, pngOutputPath) = ExileAuraIconCache.GetSafeOutputPaths(ResolveIconCacheDirectory(), normalizedPath);
         rule.ExtractedPngPath = pngOutputPath;
         rule.IconTextureKey = textureKey;
@@ -225,68 +208,107 @@ public sealed partial class ExileAurasModule
         {
             if (IsTextureRegistered(textureKey))
             {
-                SetIconStatus(rule, "Icon already registered; skipped extraction.");
+                SetIconStatus(rule, ExileAuraIconStatusKind.Skipped, "Icon already registered; skipped extraction.");
                 return;
             }
 
-            SetIconStatus(rule, TryEnsureImageRegistered(textureKey, pngOutputPath)
-                ? "Icon already existed; registered it."
-                : "Icon already existed but could not be registered.");
+            if (TryEnsureImageRegistered(textureKey, pngOutputPath))
+            {
+                SetIconStatus(rule, ExileAuraIconStatusKind.Ready, "Icon already existed; registered it.");
+            }
+            else
+            {
+                SetIconStatus(rule, ExileAuraIconStatusKind.Failed, "Icon already existed but could not be registered.");
+            }
+
             return;
         }
 
         var entry = ExtractRuleIcon(ddsFile);
         rule.ExtractedPngPath = entry.PngOutputPath;
         rule.IconTextureKey = textureKey;
-        SetIconStatus(rule, entry.State switch
+        var (kind, message) = entry.State switch
         {
-            ExileAuraIconCacheState.Queued => "Icon extraction queued.",
-            ExileAuraIconCacheState.Extracting => "Icon extraction started.",
-            ExileAuraIconCacheState.Ready => "Icon extracted.",
-            ExileAuraIconCacheState.MissingPath => "Icon DDS was not found in Content.ggpk.",
-            ExileAuraIconCacheState.Failed => $"Icon extraction failed: {entry.Error}",
-            _ => "Icon extraction skipped."
-        });
+            ExileAuraIconCacheState.Queued => (ExileAuraIconStatusKind.Queued, "Icon extraction queued."),
+            ExileAuraIconCacheState.Extracting => (ExileAuraIconStatusKind.Extracting, "Icon extraction started."),
+            ExileAuraIconCacheState.Ready => (ExileAuraIconStatusKind.Ready, "Icon extracted."),
+            ExileAuraIconCacheState.MissingPath => (ExileAuraIconStatusKind.Failed, "Icon DDS was not found in Content.ggpk."),
+            ExileAuraIconCacheState.Failed => (ExileAuraIconStatusKind.Failed, $"Icon extraction failed: {entry.Error}"),
+            _ => (ExileAuraIconStatusKind.Skipped, "Icon extraction skipped.")
+        };
+        SetIconStatus(rule, kind, message);
     }
 
     private void RefreshPendingIconStatus(ExileAuraRule rule)
     {
+        var status = GetIconStatus(rule, includeExpiredPending: true);
         if (string.IsNullOrWhiteSpace(rule.ExtractedPngPath) ||
             !File.Exists(rule.ExtractedPngPath) ||
-            !IsPendingIconStatus(rule.IconStatus))
+            status?.IsPending != true)
         {
             return;
         }
 
-        var textureKey = string.IsNullOrWhiteSpace(rule.IconTextureKey) ? CreateTextureKey(rule) : rule.IconTextureKey;
+        var textureKey = string.IsNullOrWhiteSpace(rule.IconTextureKey) ? ExileAuraTextureKeys.Icon(rule) : rule.IconTextureKey;
         rule.IconTextureKey = textureKey;
-        SetIconStatus(rule, TryEnsureImageRegistered(textureKey, rule.ExtractedPngPath)
-            ? "Icon extracted and registered."
-            : "Icon extracted but could not be registered.");
+        if (TryEnsureImageRegistered(textureKey, rule.ExtractedPngPath))
+        {
+            SetIconStatus(rule, ExileAuraIconStatusKind.Ready, "Icon extracted and registered.");
+        }
+        else
+        {
+            SetIconStatus(rule, ExileAuraIconStatusKind.Failed, "Icon extracted but could not be registered.");
+        }
     }
 
-    private static bool IsPendingIconStatus(string status)
+    private string GetVisibleAssetExtractionStatus()
     {
-        return string.Equals(status, "Icon extraction queued.", StringComparison.Ordinal) ||
-               string.Equals(status, "Icon extraction started.", StringComparison.Ordinal);
+        lock (_assetExtractionSync)
+        {
+            return !string.IsNullOrWhiteSpace(_assetExtractionStatus) &&
+                   (_assetExtractionRunning || Environment.TickCount64 < _assetExtractionStatusExpiresAtMs)
+                ? _assetExtractionStatus
+                : string.Empty;
+        }
     }
 
-    private bool IsAssetExtractionStatusVisible()
+    private bool IsAssetExtractionRunning()
     {
-        return !string.IsNullOrWhiteSpace(_assetExtractionStatus) &&
-               (_assetExtractionRunning || Environment.TickCount64 < _assetExtractionStatusExpiresAtMs);
+        lock (_assetExtractionSync)
+        {
+            return _assetExtractionRunning;
+        }
     }
 
     private void SetAssetExtractionStatus(string status)
     {
-        _assetExtractionStatus = status;
-        _assetExtractionStatusExpiresAtMs = Environment.TickCount64 + StatusVisibleMs;
+        lock (_assetExtractionSync)
+        {
+            _assetExtractionStatus = status;
+            _assetExtractionStatusExpiresAtMs = Environment.TickCount64 + StatusVisibleMs;
+        }
     }
 
-    private static void SetIconStatus(ExileAuraRule rule, string status)
+    private void SetIconStatus(ExileAuraRule rule, ExileAuraIconStatusKind kind, string message)
     {
-        rule.IconStatus = status;
-        rule.IconStatusExpiresAtMs = Environment.TickCount64 + StatusVisibleMs;
+        _iconStatuses[rule.Id] = new ExileAuraIconStatus(kind, message, Environment.TickCount64 + StatusVisibleMs);
+    }
+
+    private ExileAuraIconStatus GetIconStatus(ExileAuraRule rule, bool includeExpiredPending = false)
+    {
+        if (!_iconStatuses.TryGetValue(rule.Id, out var status))
+        {
+            return null;
+        }
+
+        var expired = Environment.TickCount64 >= status.ExpiresAtMs;
+        if (status.Kind == ExileAuraIconStatusKind.None || (!status.IsPending && expired))
+        {
+            _iconStatuses.Remove(rule.Id);
+            return null;
+        }
+
+        return expired && !includeExpiredPending ? null : status;
     }
 
     private string ResolveIconCacheDirectory()
@@ -312,7 +334,7 @@ public sealed partial class ExileAurasModule
         }
 
         _autoDetectAttempted = true;
-        var detectedPath = TryAutoDetectContentGgpkPath();
+        var detectedPath = TryGetContentGgpkPath(GameController?.Window?.Process);
         if (!string.IsNullOrWhiteSpace(detectedPath))
         {
             Settings.ContentGgpkPath.Value = detectedPath;
@@ -322,32 +344,22 @@ public sealed partial class ExileAurasModule
         return string.Empty;
     }
 
-    private static string TryAutoDetectContentGgpkPath()
+    private static string TryGetContentGgpkPath(Process process)
     {
-        foreach (var processName in new[] { "PathOfExile", "PathOfExile_x64", "PathOfExileSteam", "PathOfExile2" })
+        try
         {
-            foreach (var process in Process.GetProcessesByName(processName))
+            var exePath = process?.MainModule?.FileName;
+            if (string.IsNullOrWhiteSpace(exePath))
             {
-                try
-                {
-                    var exePath = process.MainModule?.FileName;
-                    if (string.IsNullOrWhiteSpace(exePath))
-                    {
-                        continue;
-                    }
-
-                    var candidate = Path.Combine(Path.GetDirectoryName(exePath)!, "Content.ggpk");
-                    if (File.Exists(candidate))
-                    {
-                        return candidate;
-                    }
-                }
-                catch
-                {
-                }
+                return null;
             }
-        }
 
-        return null;
+            var candidate = Path.Combine(Path.GetDirectoryName(exePath)!, "Content.ggpk");
+            return File.Exists(candidate) ? candidate : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

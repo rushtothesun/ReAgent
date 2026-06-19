@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Numerics;
 using ExileCore2.Shared.Helpers;
@@ -56,22 +57,22 @@ public sealed partial class ExileAurasModule
 
     private void DrawFrame(ExileAuraRule rule)
     {
-        var frameIndex = Array.FindIndex(FrameOptions, x => string.Equals(x, rule.Frame, StringComparison.Ordinal));
+        var frameIndex = Array.FindIndex(ExileAuraFrames.Options, x => string.Equals(x, rule.Frame, StringComparison.Ordinal));
         if (frameIndex < 0)
         {
             frameIndex = 0;
         }
 
-        if (ImGui.Combo("Frame", ref frameIndex, FrameOptions, FrameOptions.Length))
+        if (ImGui.Combo("Frame", ref frameIndex, ExileAuraFrames.Options, ExileAuraFrames.Options.Length))
         {
-            rule.Frame = FrameOptions[frameIndex];
+            rule.Frame = ExileAuraFrames.Options[frameIndex];
         }
 
-        if (!string.Equals(rule.Frame, "None", StringComparison.Ordinal) &&
-            FrameLayouts.TryGetValue(rule.Frame, out var layout))
+        if (!string.Equals(rule.Frame, ExileAuraFrames.None, StringComparison.Ordinal) &&
+            ExileAuraFrames.TryGetLayout(rule.Frame, out var layout))
         {
-            var framePath = System.IO.Path.Combine(ResolveFramesDirectory(), layout.FileName);
-            if (!System.IO.File.Exists(framePath))
+            var framePath = Path.Combine(ResolveFramesDirectory(), layout.FileName);
+            if (!File.Exists(framePath))
             {
                 ImGui.SameLine();
                 ImGui.TextColored(Color.Gray.ToImguiVec4(), "Frame not extracted.");
@@ -106,15 +107,7 @@ public sealed partial class ExileAurasModule
 
     private static void DrawColorPicker(ExileAuraRule rule)
     {
-        var color = rule.Color.ToImguiVec4();
-        if (ImGui.ColorEdit4("Color", ref color, ImGuiColorEditFlags.NoInputs))
-        {
-            rule.Color = Color.FromArgb(
-                ClampByte(color.W * 255f),
-                ClampByte(color.X * 255f),
-                ClampByte(color.Y * 255f),
-                ClampByte(color.Z * 255f));
-        }
+        DrawColorEdit("Color", rule.Color, color => rule.Color = color);
     }
 
     private static void DrawManualIconPath(ExileAuraRule rule)
@@ -124,7 +117,7 @@ public sealed partial class ExileAurasModule
         if (ImGui.InputText("Manual Icon PNG Path", ref manualIconPath, 512))
         {
             rule.ManualIconPath = manualIconPath;
-            rule.IconTextureKey = CreateTextureKey(rule);
+            rule.IconTextureKey = ExileAuraTextureKeys.Icon(rule);
         }
 
         ImGui.PopItemWidth();
@@ -152,10 +145,11 @@ public sealed partial class ExileAurasModule
             ImGui.TextColored(Color.Gray.ToImguiVec4(), Settings.EnableExtraction.Value ? "Needs active source icon." : "Extraction is disabled.");
         }
 
-        if (!string.IsNullOrWhiteSpace(rule.IconStatus) && Environment.TickCount64 < rule.IconStatusExpiresAtMs)
+        var status = GetIconStatus(rule);
+        if (status != null)
         {
             ImGui.SameLine();
-            ImGui.TextColored(Color.LightGreen.ToImguiVec4(), rule.IconStatus);
+            ImGui.TextColored(Color.LightGreen.ToImguiVec4(), status.Message);
         }
     }
 
@@ -237,33 +231,15 @@ public sealed partial class ExileAurasModule
         DrawRangeNode("Text Scale", display.TextScale);
         ImGui.PopItemWidth();
 
-        var textColor = display.TextColor.ToImguiVec4();
-        if (ImGui.ColorEdit4("Text Color", ref textColor, ImGuiColorEditFlags.NoInputs))
-        {
-            display.TextColor = Color.FromArgb(
-                ClampByte(textColor.W * 255f),
-                ClampByte(textColor.X * 255f),
-                ClampByte(textColor.Y * 255f),
-                ClampByte(textColor.Z * 255f));
-        }
+        DrawColorEdit("Text Color", display.TextColor, color => display.TextColor = color);
     }
 
     private static void DrawDisplayNameWarnings(ExileAuraRule rule)
     {
-        if (rule.Displays.Any(display => string.IsNullOrWhiteSpace(display.Name)))
+        var validation = ExileAuraDisplayValidator.Validate(rule);
+        if (!validation.Success)
         {
-            ImGui.TextColored(Color.Yellow.ToImguiVec4(), "Every display needs a name.");
-        }
-
-        var duplicateName = rule.Displays
-            .Where(display => !string.IsNullOrWhiteSpace(display.Name))
-            .GroupBy(display => display.Name, StringComparer.OrdinalIgnoreCase)
-            .Where(group => group.Count() > 1)
-            .Select(group => group.Key)
-            .FirstOrDefault();
-        if (!string.IsNullOrWhiteSpace(duplicateName))
-        {
-            ImGui.TextColored(Color.Yellow.ToImguiVec4(), $"Display name '{duplicateName}' is duplicated.");
+            ImGui.TextColored(Color.Yellow.ToImguiVec4(), validation.Error);
         }
     }
 
@@ -342,6 +318,19 @@ public sealed partial class ExileAurasModule
 
         ImGui.SameLine();
         ImGui.TextUnformatted(label);
+    }
+
+    private static void DrawColorEdit(string label, Color current, Action<Color> setColor)
+    {
+        var color = current.ToImguiVec4();
+        if (ImGui.ColorEdit4(label, ref color, ImGuiColorEditFlags.NoInputs))
+        {
+            setColor(Color.FromArgb(
+                ClampByte(color.W * 255f),
+                ClampByte(color.X * 255f),
+                ClampByte(color.Y * 255f),
+                ClampByte(color.Z * 255f)));
+        }
     }
 
     private static int ClampByte(float value)
