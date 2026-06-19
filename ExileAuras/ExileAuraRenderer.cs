@@ -41,12 +41,12 @@ public sealed partial class ExileAurasModule
         _nextPollMs = now + Settings.PollIntervalMs.Value;
         _displayEntries.Clear();
 
-        foreach (var rule in EnumerateExileAuraRules(profile, state))
+        foreach (var (group, rule) in EnumerateExileAuraRules(profile, state))
         {
             var evaluation = _conditionCompiler.Evaluate(rule, state);
             if (evaluation.Active)
             {
-                _displayEntries.Add(new ExileAuraDisplayEntry(rule, true, evaluation.Error, evaluation.Displays));
+                _displayEntries.Add(new ExileAuraDisplayEntry(group, rule, true, evaluation.Error, evaluation.Displays));
             }
         }
     }
@@ -55,10 +55,11 @@ public sealed partial class ExileAurasModule
     {
         var entries = Settings.Unlocked.Value
             ? EnumerateExileAuraRules(profile, state)
-                .Select(rule =>
+                .Select(item =>
                 {
+                    var (group, rule) = item;
                     var evaluation = _conditionCompiler.Evaluate(rule, state);
-                    return new ExileAuraDisplayEntry(rule, evaluation.Active, evaluation.Error, evaluation.Displays);
+                    return new ExileAuraDisplayEntry(group, rule, evaluation.Active, evaluation.Error, evaluation.Displays);
                 })
                 .ToList()
             : _displayEntries;
@@ -75,13 +76,13 @@ public sealed partial class ExileAurasModule
         }
     }
 
-    private static IEnumerable<ExileAuraRule> EnumerateExileAuraRules(Profile profile, RuleState state)
+    private static IEnumerable<(RuleGroup Group, ExileAuraRule Rule)> EnumerateExileAuraRules(Profile profile, RuleState state)
     {
         return profile.Groups
             .Where(group => group.ShouldEvaluate(state))
-            .SelectMany(group => group.Rules)
-            .Where(rule => rule.Kind == RuleKind.ExileAura && rule.ExileAura != null)
-            .Select(rule => rule.ExileAura);
+            .SelectMany(group => group.Rules.Select(rule => (Group: group, Rule: rule)))
+            .Where(rule => rule.Rule.Kind == RuleKind.ExileAura && rule.Rule.ExileAura != null)
+            .Select(rule => (rule.Group, rule.Rule.ExileAura));
     }
 
     private void DrawAura(ExileAuraDisplayEntry entry)
@@ -91,11 +92,11 @@ public sealed partial class ExileAurasModule
         var iconSize = rule.IconSize.Value;
         var boundsSize = new Vector2(iconSize, iconSize);
 
-        HandleDrag(rule, position, boundsSize);
+        HandleDrag(entry, position, boundsSize);
 
         if (Settings.Unlocked.Value)
         {
-            DrawUnlockedBounds(rule, entry, position, boundsSize);
+            DrawUnlockedBounds(entry, position, boundsSize);
         }
 
         DrawAuraIcon(entry, position, iconSize);
@@ -105,11 +106,12 @@ public sealed partial class ExileAurasModule
         }
     }
 
-    private void DrawUnlockedBounds(ExileAuraRule rule, ExileAuraDisplayEntry entry, Vector2 position, Vector2 boundsSize)
+    private void DrawUnlockedBounds(ExileAuraDisplayEntry entry, Vector2 position, Vector2 boundsSize)
     {
+        var rule = entry.Rule;
         _plugin.Graphics.DrawBox(position - new Vector2(7f, 22f), position + boundsSize + new Vector2(7f, 7f), PlacementBackgroundColor, 4f);
         _plugin.Graphics.DrawFrame(position - new Vector2(7f, 22f), position + boundsSize + new Vector2(7f, 7f), PlacementFrameColor, 2);
-        var label = $"{rule.Name} {rule.PositionX.Value},{rule.PositionY.Value}";
+        var label = $"{entry.Group.Name}: {rule.Name} {rule.PositionX.Value},{rule.PositionY.Value}";
         if (!entry.Active)
         {
             label += " idle";
@@ -118,7 +120,7 @@ public sealed partial class ExileAurasModule
         _plugin.Graphics.DrawText(label, position - new Vector2(1f, 20f), PlacementFrameColor);
     }
 
-    private void HandleDrag(ExileAuraRule rule, Vector2 position, Vector2 size)
+    private void HandleDrag(ExileAuraDisplayEntry entry, Vector2 position, Vector2 size)
     {
         if (!Settings.Unlocked.Value)
         {
@@ -126,6 +128,7 @@ public sealed partial class ExileAurasModule
             return;
         }
 
+        var rule = entry.Rule;
         var dragRectMin = position - new Vector2(7f, 22f);
         var dragSize = size + new Vector2(14f, 29f);
         var flags = ImGuiWindowFlags.NoTitleBar
@@ -165,7 +168,7 @@ public sealed partial class ExileAurasModule
 
             if (active)
             {
-                ApplyDragDelta(rule);
+                ApplyDragDelta(entry);
             }
         }
 
@@ -173,7 +176,7 @@ public sealed partial class ExileAurasModule
         ImGui.PopStyleVar();
     }
 
-    private static void ApplyDragDelta(ExileAuraRule rule)
+    private static void ApplyDragDelta(ExileAuraDisplayEntry entry)
     {
         var delta = ImGui.GetIO().MouseDelta;
         if (delta == Vector2.Zero)
@@ -181,6 +184,23 @@ public sealed partial class ExileAurasModule
             return;
         }
 
+        if (entry.Group.MoveTogether)
+        {
+            foreach (var rule in entry.Group.Rules
+                         .Where(rule => rule.Kind == RuleKind.ExileAura && rule.ExileAura != null)
+                         .Select(rule => rule.ExileAura))
+            {
+                ApplyDragDelta(rule, delta);
+            }
+
+            return;
+        }
+
+        ApplyDragDelta(entry.Rule, delta);
+    }
+
+    private static void ApplyDragDelta(ExileAuraRule rule, Vector2 delta)
+    {
         rule.PositionX.Value = Math.Clamp((int)MathF.Round(rule.PositionX.Value + delta.X), rule.PositionX.Min, rule.PositionX.Max);
         rule.PositionY.Value = Math.Clamp((int)MathF.Round(rule.PositionY.Value + delta.Y), rule.PositionY.Min, rule.PositionY.Max);
     }

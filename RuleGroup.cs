@@ -23,6 +23,7 @@ public class RuleGroup
     public bool EnabledInHideout;
     public bool EnabledInPeacefulAreas;
     public bool EnabledInMaps = true;
+    public bool MoveTogether;
     public string Name;
 
     public RuleGroup(string name, RuleKind kind = RuleKind.ReAgent)
@@ -84,6 +85,12 @@ public class RuleGroup
         if (ImGui.Button("Export group"))
         {
             ImGui.SetClipboardText(DataExporter.ExportDataBase64(this, "reagent_group_v1", new JsonSerializerSettings()));
+        }
+
+        if (EffectiveKind == RuleKind.ExileAura)
+        {
+            ImGui.SameLine();
+            ImGui.Checkbox("Move Together", ref MoveTogether);
         }
 
         using var groupReg = state?.InternalState.SetCurrentGroup(this);

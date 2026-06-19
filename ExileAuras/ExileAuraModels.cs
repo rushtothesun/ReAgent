@@ -114,6 +114,11 @@ public sealed record ExileAuraFrameLayout(
     float OffsetX,
     float OffsetY);
 
-public sealed record ExileAuraDisplayEntry(ExileAuraRule Rule, bool Active, string Error, IReadOnlyCollection<ExileAuraDisplayRuntime> Displays);
+public sealed record ExileAuraDisplayEntry(
+    RuleGroup Group,
+    ExileAuraRule Rule,
+    bool Active,
+    string Error,
+    IReadOnlyCollection<ExileAuraDisplayRuntime> Displays);
 
 public sealed record ExileAuraIconSource(string DisplayName, string DdsFile);
