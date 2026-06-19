@@ -89,6 +89,7 @@ public sealed class ExileAuraDisplay
     }
 }
 
+[Api]
 public sealed class ExileAuraDisplayRuntime
 {
     internal ExileAuraDisplayRuntime(ExileAuraDisplay display)
@@ -99,10 +100,15 @@ public sealed class ExileAuraDisplayRuntime
     }
 
     internal ExileAuraDisplay Display { get; }
+    [Api]
     public string Name { get; }
+    [Api]
     public bool Enabled { get; set; }
+    [Api]
     public string Value { get; internal set; } = "";
+    [Api]
     public string Text { get; set; } = "";
+    [Api]
     public string TextOverride { get; set; } = "";
 }
 
