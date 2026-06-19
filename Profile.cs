@@ -8,6 +8,7 @@ using ExileCore2;
 using ExileCore2.Shared.Helpers;
 using ImGuiNET;
 using Newtonsoft.Json;
+using ReAgent.ExileAuras;
 using ReAgent.State;
 using Vector2 = System.Numerics.Vector2;
 using Vector4 = System.Numerics.Vector4;
@@ -23,6 +24,7 @@ public class Profile
     private static int _lastTemporaryId = -1;
     private int _deleteIndex = -1;
     private int _selectedGroupIndex = 0;
+    private bool _selectNewGroupAfterPopup;
 
     internal int TemporaryId { get; } = Interlocked.Increment(ref _lastTemporaryId);
     public List<RuleGroup> Groups { get; } = new();
@@ -103,7 +105,7 @@ public class Profile
         }
     }
 
-    private unsafe void DrawSettingsVertical(RuleState state, ReAgentSettings settings)
+    private unsafe void DrawSettingsVertical(RuleState state, ReAgentSettings settings, ExileAurasModule exileAuras)
     {
         if (ImGui.BeginChild("left", new Vector2(settings.PluginSettings.VerticalTabContainerWidth.Value, 0)))
         {
@@ -126,7 +128,7 @@ public class Profile
                 ImGui.PushStyleColor(ImGuiCol.ButtonActive, tabActiveColor);
                 ImGui.PushStyleVar(ImGuiStyleVar.ButtonTextAlign, new Vector2(0, 0.5f));
                 var tabClicked = ImGui.Button(
-                    $"[{(group.EnabledInMaps ? "M" : "")}{(group.EnabledInTown ? "T" : "")}{(group.EnabledInHideout ? "H" : "")}{(group.EnabledInPeacefulAreas ? "P" : "")}]{group.Name}###RuleGroup{i}",
+                    $"[{GetGroupKindPrefix(group)}]{group.Name}###RuleGroup{i}",
                     new Vector2(ImGui.GetWindowWidth() - ImGui.GetTextLineHeightWithSpacing(), ImGui.GetFrameHeight()));
                 var tabHovered = ImGui.IsItemHovered();
                 ImGui.PopStyleVar(1);
@@ -192,7 +194,14 @@ public class Profile
 
             if (ImGui.Button("+"))
             {
-                Groups.Add(new RuleGroup(GetNewRuleGroupName()));
+                ImGui.OpenPopup("AddRuleGroupKindPopup");
+            }
+
+            DrawAddRuleGroupPopup();
+            if (_selectNewGroupAfterPopup)
+            {
+                _selectedGroupIndex = Math.Max(Groups.Count - 1, 0);
+                _selectNewGroupAfterPopup = false;
             }
 
             if (ImGui.Button("Import group"))
@@ -225,22 +234,22 @@ public class Profile
         ImGui.BeginChild("item");
         if (Groups.Count > _selectedGroupIndex)
         {
-            Groups[_selectedGroupIndex].DrawSettings(state, settings);
+            Groups[_selectedGroupIndex].DrawSettings(state, settings, exileAuras);
         }
 
         ImGui.EndChild();
         ImGui.EndGroup();
     }
 
-    public void DrawSettings(RuleState state, ReAgentSettings settings)
+    public void DrawSettings(RuleState state, ReAgentSettings settings, ExileAurasModule exileAuras)
     {
         if (settings.PluginSettings.EnableVerticalGroupTabs)
         {
-            DrawSettingsVertical(state, settings);
+            DrawSettingsVertical(state, settings, exileAuras);
         }
         else
         {
-            DrawSettingsHorizontal(state, settings);
+            DrawSettingsHorizontal(state, settings, exileAuras);
         }
 
         DrawGroupImport();
@@ -252,16 +261,16 @@ public class Profile
         _groupImportObject = null;
     }
 
-    private void DrawSettingsHorizontal(RuleState state, ReAgentSettings settings)
+    private void DrawSettingsHorizontal(RuleState state, ReAgentSettings settings, ExileAurasModule exileAuras)
     {
-        if (ImGui.BeginTabBar("Rule groups", ImGuiTabBarFlags.AutoSelectNewTabs | ImGuiTabBarFlags.Reorderable | ImGuiTabBarFlags.FittingPolicyScroll))
-        {
-            if (ImGui.TabItemButton("+", ImGuiTabItemFlags.Trailing))
+            if (ImGui.BeginTabBar("Rule groups", ImGuiTabBarFlags.AutoSelectNewTabs | ImGuiTabBarFlags.Reorderable | ImGuiTabBarFlags.FittingPolicyScroll))
             {
-                Groups.Add(new RuleGroup(GetNewRuleGroupName()));
-            }
+                if (ImGui.TabItemButton("+", ImGuiTabItemFlags.Trailing))
+                {
+                    ImGui.OpenPopup("AddRuleGroupKindPopup");
+                }
 
-            if (ImGui.TabItemButton("Import", ImGuiTabItemFlags.Trailing))
+                if (ImGui.TabItemButton("Import", ImGuiTabItemFlags.Trailing))
             {
                 _groupImportInput = "";
                 _groupImportObject = null;
@@ -277,7 +286,7 @@ public class Profile
                 }
 
                 var isSelected = ImGui.BeginTabItem(
-                    $"[{(group.EnabledInMaps ? "M" : "")}{(group.EnabledInTown ? "T" : "")}{(group.EnabledInHideout ? "H" : "")}{(group.EnabledInPeacefulAreas ? "P" : "")}]{group.Name}###RuleGroup{i}",
+                    $"[{GetGroupKindPrefix(group)}]{group.Name}###RuleGroup{i}",
                     ref preserveItem,
                     ImGuiTabItemFlags.UnsavedDocument);
 
@@ -309,7 +318,7 @@ public class Profile
 
                 if (isSelected)
                 {
-                    group.DrawSettings(state, settings);
+                    group.DrawSettings(state, settings, exileAuras);
                     ImGui.EndTabItem();
                 }
 
@@ -327,6 +336,7 @@ public class Profile
                 }
             }
 
+            DrawAddRuleGroupPopup();
             if (ImguiExt.DrawDeleteConfirmationPopup("RuleGroupDeleteConfirmation", _deleteIndex == -1 ? null : Groups[_deleteIndex].Name) == true)
             {
                 Groups.RemoveAt(_deleteIndex);
@@ -342,5 +352,45 @@ public class Profile
         var movedItem = Groups[sourceIndex];
         Groups.RemoveAt(sourceIndex);
         Groups.Insert(targetIndex, movedItem);
+    }
+
+    private void DrawAddRuleGroupPopup()
+    {
+        if (!ImGui.BeginPopup("AddRuleGroupKindPopup"))
+        {
+            return;
+        }
+
+        if (ImGui.Button("ReAgent Rule"))
+        {
+            AddRuleGroup(RuleKind.ReAgent);
+            ImGui.CloseCurrentPopup();
+        }
+
+        if (ImGui.Button("ExileAura Rule"))
+        {
+            AddRuleGroup(RuleKind.ExileAura);
+            ImGui.CloseCurrentPopup();
+        }
+
+        ImGui.EndPopup();
+    }
+
+    private void AddRuleGroup(RuleKind kind)
+    {
+        var group = new RuleGroup(GetNewRuleGroupName(), kind);
+        group.Rules.Add(kind switch
+        {
+            RuleKind.ExileAura => Rule.CreateExileAura(),
+            _ => new Rule("false", 1)
+        });
+
+        Groups.Add(group);
+        _selectNewGroupAfterPopup = true;
+    }
+
+    private static string GetGroupKindPrefix(RuleGroup group)
+    {
+        return group.EffectiveKind == RuleKind.ExileAura ? "E" : "R";
     }
 }

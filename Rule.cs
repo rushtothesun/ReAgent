@@ -17,6 +17,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Scripting;
 using Microsoft.CodeAnalysis.Scripting.Hosting;
 using Newtonsoft.Json;
+using ReAgent.ExileAuras;
 using ReAgent.SideEffects;
 using ReAgent.State;
 using static ExileCore2.Shared.Nodes.HotkeyNodeV2;
@@ -64,6 +65,8 @@ public class Rule
 
     public string RuleSource;
     public RuleActionType Type = RuleActionType.Key;
+    public RuleKind Kind = RuleKind.ReAgent;
+    public ExileAuraRule ExileAura;
 
     public Keys? Key
     {
@@ -100,8 +103,33 @@ public class Rule
         ResetFunction();
     }
 
-    public void Display(RuleState state, bool expand)
+    public static Rule CreateExileAura()
     {
+        return new Rule("false", 2)
+        {
+            Kind = RuleKind.ExileAura,
+            Type = RuleActionType.SingleSideEffect,
+            KeyV2 = null,
+            ControllerKeyV2 = null,
+            ExileAura = new ExileAuraRule()
+        };
+    }
+
+    public void Display(RuleState state, bool expand, ExileAurasModule exileAuras = null)
+    {
+        if (Kind == RuleKind.ExileAura)
+        {
+            ExileAura ??= new ExileAuraRule();
+            if (exileAuras == null)
+            {
+                ImGui.TextUnformatted($"ExileAura: {ExileAura.Name}");
+                return;
+            }
+
+            exileAuras.DrawRuleEditor(ExileAura, state, expand);
+            return;
+        }
+
         if (expand)
         {
             if (ImguiExt.EnumerableComboBox("Action type", Enum.GetValues<RuleActionType>(), ref Type))
@@ -407,6 +435,11 @@ public class Rule
 
     public IList<ISideEffect> Evaluate(RuleState state)
     {
+        if (Kind == RuleKind.ExileAura)
+        {
+            return [];
+        }
+
         if (state == null) return [];
         IList<ISideEffect> result = null;
         var (func, compilationException) = _compilationResult.Value;

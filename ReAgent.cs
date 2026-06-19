@@ -14,6 +14,7 @@ using ExileCore2.Shared.Helpers;
 using ExileCore2.Shared.Nodes;
 using ImGuiNET;
 using Newtonsoft.Json;
+using ReAgent.ExileAuras;
 using ReAgent.SideEffects;
 using ReAgent.State;
 using RectangleF = ExileCore2.Shared.RectangleF;
@@ -27,6 +28,7 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
     private readonly RuleInternalState _internalState = new RuleInternalState();
     private readonly ConditionalWeakTable<Profile, string> _pendingNames = new ConditionalWeakTable<Profile, string>();
     private readonly HashSet<string> _loadedTextures = new();
+    private ExileAurasModule _exileAuras;
     private RuleState _state;
     private List<SideEffectContainer> _pendingSideEffects = new List<SideEffectContainer>();
     private string _profileToDelete = null;
@@ -36,6 +38,8 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
     public override bool Initialise()
     {
         ProcessID = GameController.Window.Process.Id;
+        _exileAuras = new ExileAurasModule(this);
+        _exileAuras.Initialise();
 
         var stringData = File.ReadAllText(Path.Join(DirectoryFullName, "CustomAilments.json"));
         CustomAilments = JsonConvert.DeserializeObject<Dictionary<string, List<string>>>(stringData);
@@ -132,6 +136,7 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
     public override void DrawSettings()
     {
         base.DrawSettings();
+        _exileAuras.DrawSettings();
         DrawProfileImport();
 
         try
@@ -150,6 +155,12 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
         else
         {
             ImGui.Text("");
+        }
+
+        if (!HasVisibleSpaceFor(ImGui.GetTextLineHeightWithSpacing() * 4))
+        {
+            ImGui.TextColored(Color.Yellow.ToImguiVec4(), "Move the settings window up to view profiles.");
+            return;
         }
 
         if (ImGui.BeginTabBar("Profiles", ImGuiTabBarFlags.AutoSelectNewTabs | ImGuiTabBarFlags.FittingPolicyScroll | ImGuiTabBarFlags.Reorderable))
@@ -200,6 +211,13 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
                         }
                         else
                         {
+                            if (!HasVisibleSpaceFor(ImGui.GetFrameHeightWithSpacing() * 5))
+                            {
+                                ImGui.TextColored(Color.Yellow.ToImguiVec4(), "Move or resize the settings window to view this profile.");
+                                ImGui.EndTabItem();
+                                continue;
+                            }
+
                             _pendingNames.TryGetValue(profile, out var newProfileName);
                             newProfileName ??= profileName;
                             ImGui.InputText("Name", ref newProfileName, 40);
@@ -240,7 +258,7 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
                                 }
                             }
 
-                            profile.DrawSettings(_state, Settings);
+                            profile.DrawSettings(_state, Settings, _exileAuras);
                             ImGui.EndTabItem();
                         }
                     }
@@ -283,6 +301,36 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
 
             ImGui.EndTabBar();
         }
+    }
+
+    private static bool HasVisibleSpaceFor(float height)
+    {
+        const float minimumProfileWidth = 420f;
+        return HasVisibleSpaceFor(Math.Min(ImGui.GetContentRegionAvail().X, minimumProfileWidth), height);
+    }
+
+    private static bool HasVisibleSpaceFor(float width, float height)
+    {
+        var cursor = ImGui.GetCursorScreenPos();
+        var io = ImGui.GetIO();
+        var style = ImGui.GetStyle();
+        var windowPos = ImGui.GetWindowPos();
+        var windowSize = ImGui.GetWindowSize();
+
+        var visibleLeft = Math.Max(0, windowPos.X);
+        var visibleTop = Math.Max(0, windowPos.Y);
+        var visibleRight = Math.Min(io.DisplaySize.X, windowPos.X + windowSize.X);
+        var visibleBottom = Math.Min(io.DisplaySize.Y, windowPos.Y + windowSize.Y);
+
+        var safeLeft = visibleLeft + style.WindowPadding.X;
+        var safeTop = visibleTop + style.WindowPadding.Y;
+        var safeRight = visibleRight - style.WindowPadding.X;
+        var safeBottom = visibleBottom - style.WindowPadding.Y;
+
+        return cursor.X >= safeLeft &&
+               cursor.Y >= safeTop &&
+               cursor.X + Math.Max(1, width) <= safeRight &&
+               cursor.Y + Math.Max(1, height) <= safeBottom;
     }
 
     private string GetNewProfileName(string prefix)
@@ -331,11 +379,6 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
             ImGui.End();
         }
 
-        if (!shouldExecute && !Settings.InspectState && !Settings.ShowControllerState)
-        {
-            return;
-        }
-
         _internalState.KeyToPress = null;
         _internalState.KeysToHoldDown.Clear();
         _internalState.KeysToRelease.Clear();
@@ -351,6 +394,16 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
         _internalState.FullscreenPanelVisible = GameController.IngameState.IngameUi.FullscreenPanels.Any(p => p.IsVisible);
         _state = new RuleState(this, _internalState);
 
+        if (!shouldExecute && !Settings.InspectState && !Settings.ShowControllerState)
+        {
+            if (Settings.ExileAuras.Unlocked.Value)
+            {
+                _exileAuras.Render(profile, _state);
+            }
+
+            return;
+        }
+
         if (Settings.InspectState)
         {
             GameController.InspectObject(_state, "ReAgent state");
@@ -363,6 +416,11 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
 
         if (!shouldExecute)
         {
+            if (Settings.ExileAuras.Unlocked.Value)
+            {
+                _exileAuras.Render(profile, _state);
+            }
+
             return;
         }
 
@@ -465,6 +523,8 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
             Graphics.DrawBox(position, position + textSize, Color.Black);
             Graphics.DrawText(text, position, ColorFromName(color));
         }
+
+        _exileAuras.Render(profile, _state);
     }
 
     private void DrawControllerStateWindow(RuleState state)

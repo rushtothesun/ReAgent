@@ -5,6 +5,7 @@ using ExileCore2;
 using ExileCore2.Shared.Helpers;
 using ImGuiNET;
 using Newtonsoft.Json;
+using ReAgent.ExileAuras;
 using ReAgent.SideEffects;
 using ReAgent.State;
 
@@ -16,6 +17,7 @@ public class RuleGroup
     private int _deleteIndex = -1;
 
     public List<Rule> Rules = new();
+    public RuleKind Kind = RuleKind.ReAgent;
     public bool Enabled;
     public bool EnabledInTown;
     public bool EnabledInHideout;
@@ -23,12 +25,18 @@ public class RuleGroup
     public bool EnabledInMaps = true;
     public string Name;
 
-    public RuleGroup(string name)
+    public RuleGroup(string name, RuleKind kind = RuleKind.ReAgent)
     {
         Name = name;
+        Kind = kind;
     }
 
-    public void DrawSettings(RuleState state, ReAgentSettings settings)
+    [JsonIgnore]
+    public RuleKind EffectiveKind => Kind == RuleKind.ExileAura || Rules.Any(rule => rule.Kind == RuleKind.ExileAura)
+        ? RuleKind.ExileAura
+        : RuleKind.ReAgent;
+
+    public void DrawSettings(RuleState state, ReAgentSettings settings, ExileAurasModule exileAuras)
     {
         using (settings.PluginSettings.ColorEnableToggles ? ImGuiHelpers.UseStyleColor(ImGuiCol.Text, Color.Lime.ToImguiVec4()) : null)
             ImGui.Checkbox("Enable", ref Enabled);
@@ -96,7 +104,7 @@ public class RuleGroup
             if (ImGui.BeginDragDropSource())
             {
                 ImguiExt.SetDragDropPayload("RuleIndex", i);
-                Rules[i].Display(state, false);
+                Rules[i].Display(state, false, exileAuras);
                 ImGui.EndDragDropSource();
             }
             else if (ImGui.IsItemHovered())
@@ -121,7 +129,7 @@ public class RuleGroup
             }
 
             ImGui.SameLine();
-            Rules[i].Display(state, _expand);
+            Rules[i].Display(state, _expand, exileAuras);
             ImguiExt.DrawLargeTransparentSelectable("##DragTarget", dropTargetStart);
             if (ImGui.BeginDragDropTarget())
             {
@@ -142,7 +150,7 @@ public class RuleGroup
 
         if (ImGui.Button("Add New Rule"))
         {
-            Rules.Add(new Rule("false", 1));
+            Rules.Add(CreateRule());
         }
 
         if (ImGui.TreeNode("State"))
@@ -195,16 +203,21 @@ public class RuleGroup
         }
     }
 
+    public bool ShouldEvaluate(RuleState state)
+    {
+        return Enabled &&
+               (state.IsInHideout, state.IsInTown, state.IsInPeacefulArea) switch
+               {
+                   (true, _, _) => EnabledInHideout,
+                   (_, true, _) => EnabledInTown,
+                   (_, _, true) => EnabledInPeacefulAreas,
+                   (false, false, false) => EnabledInMaps,
+               };
+    }
+
     public IEnumerable<SideEffectContainer> Evaluate(RuleState state)
     {
-        if (Enabled &&
-            (state.IsInHideout, state.IsInTown, state.IsInPeacefulArea) switch
-            {
-                (true, _, _) => EnabledInHideout,
-                (_, true, _) => EnabledInTown,
-                (_, _, true) => EnabledInPeacefulAreas,
-                (false, false, false) => EnabledInMaps,
-            })
+        if (ShouldEvaluate(state))
         {
             using var groupReg = state.InternalState.SetCurrentGroup(this);
             foreach (var rule in Rules)
@@ -228,5 +241,14 @@ public class RuleGroup
         var movedItem = Rules[sourceIndex];
         Rules.RemoveAt(sourceIndex);
         Rules.Insert(targetIndex, movedItem);
+    }
+
+    private Rule CreateRule()
+    {
+        return EffectiveKind switch
+        {
+            RuleKind.ExileAura => Rule.CreateExileAura(),
+            _ => new Rule("false", 1)
+        };
     }
 }

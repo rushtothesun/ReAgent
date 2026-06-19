@@ -3,6 +3,7 @@ using ExileCore2.Shared.Attributes;
 using ExileCore2.Shared.Interfaces;
 using ExileCore2.Shared.Nodes;
 using Newtonsoft.Json;
+using ReAgent.ExileAuras;
 
 namespace ReAgent;
 
@@ -36,6 +37,7 @@ public sealed class ReAgentSettings : ISettings
     public TextNode ImageDirectory { get; set; } = new("textures/ReAgent");
     private PluginSettings _pluginSettings;
 
+    [Menu("ReAgent Settings")]
     public PluginSettings PluginSettings
     {
         get => _pluginSettings;
@@ -45,6 +47,9 @@ public sealed class ReAgentSettings : ISettings
             _pluginSettings = value;
         }
     }
+
+    [IgnoreMenu]
+    public ExileAurasSettings ExileAuras { get; set; } = new();
 
     public ToggleNode Enable { get; set; } = new(true);
 }
