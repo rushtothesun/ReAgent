@@ -8,19 +8,19 @@ using ExileCore2.Shared.Nodes;
 using ImGuiNET;
 using ReAgent.State;
 
-namespace ReAgent.ExileAuras;
+namespace ReAgent.ReAgentAuras;
 
-public sealed partial class ExileAurasModule
+public sealed partial class ReAgentAurasModule
 {
     private static readonly string[] VisualOptions = ["Color", "Icon", "Manual Icon"];
     private static readonly string[] DisplayEffectOptions = ["Show Timer", "Show Charges", "Show Instance Count", "Show Stack"];
-    private static readonly string[] StartPositionOptions = Enum.GetNames<ExileAuraStartPosition>();
+    private static readonly string[] StartPositionOptions = Enum.GetNames<ReAgentAuraStartPosition>();
 
-    internal void DrawRuleEditor(ExileAuraRule rule, RuleState state, bool expand)
+    internal void DrawRuleEditor(ReAgentAuraRule rule, RuleState state, bool expand)
     {
         if (!expand)
         {
-            ImGui.TextUnformatted($"ExileAura: {rule.Name}");
+            ImGui.TextUnformatted($"ReAgentAura: {rule.Name}");
             ImGui.SameLine();
             DrawConditionStatus(rule, state);
             return;
@@ -40,7 +40,7 @@ public sealed partial class ExileAurasModule
         DrawCondition(rule, state);
     }
 
-    private static void DrawIdentity(ExileAuraRule rule)
+    private static void DrawIdentity(ReAgentAuraRule rule)
     {
         var name = rule.Name ?? string.Empty;
         if (ImGui.InputText("Rule Name", ref name, 120))
@@ -55,21 +55,21 @@ public sealed partial class ExileAurasModule
         }
     }
 
-    private void DrawFrame(ExileAuraRule rule)
+    private void DrawFrame(ReAgentAuraRule rule)
     {
-        var frameIndex = Array.FindIndex(ExileAuraFrames.Options, x => string.Equals(x, rule.Frame, StringComparison.Ordinal));
+        var frameIndex = Array.FindIndex(ReAgentAuraFrames.Options, x => string.Equals(x, rule.Frame, StringComparison.Ordinal));
         if (frameIndex < 0)
         {
             frameIndex = 0;
         }
 
-        if (ImGui.Combo("Frame", ref frameIndex, ExileAuraFrames.Options, ExileAuraFrames.Options.Length))
+        if (ImGui.Combo("Frame", ref frameIndex, ReAgentAuraFrames.Options, ReAgentAuraFrames.Options.Length))
         {
-            rule.Frame = ExileAuraFrames.Options[frameIndex];
+            rule.Frame = ReAgentAuraFrames.Options[frameIndex];
         }
 
-        if (!string.Equals(rule.Frame, ExileAuraFrames.None, StringComparison.Ordinal) &&
-            ExileAuraFrames.TryGetLayout(rule.Frame, out var layout))
+        if (!string.Equals(rule.Frame, ReAgentAuraFrames.None, StringComparison.Ordinal) &&
+            ReAgentAuraFrames.TryGetLayout(rule.Frame, out var layout))
         {
             var framePath = Path.Combine(ResolveFramesDirectory(), layout.FileName);
             if (!File.Exists(framePath))
@@ -80,50 +80,50 @@ public sealed partial class ExileAurasModule
         }
     }
 
-    private static void DrawVisual(ExileAuraRule rule)
+    private static void DrawVisual(ReAgentAuraRule rule)
     {
         var visual = (int)rule.Visual;
         if (ImGui.Combo("Visual", ref visual, VisualOptions, VisualOptions.Length))
         {
-            rule.Visual = (ExileAuraVisualSource)visual;
+            rule.Visual = (ReAgentAuraVisualSource)visual;
         }
     }
 
-    private void DrawVisualOptions(ExileAuraRule rule)
+    private void DrawVisualOptions(ReAgentAuraRule rule)
     {
         switch (rule.Visual)
         {
-            case ExileAuraVisualSource.Color:
+            case ReAgentAuraVisualSource.Color:
                 DrawColorPicker(rule);
                 break;
-            case ExileAuraVisualSource.Icon:
+            case ReAgentAuraVisualSource.Icon:
                 DrawIconExtraction(rule);
                 break;
-            case ExileAuraVisualSource.ManualIcon:
+            case ReAgentAuraVisualSource.ManualIcon:
                 DrawManualIconPath(rule);
                 break;
         }
     }
 
-    private static void DrawColorPicker(ExileAuraRule rule)
+    private static void DrawColorPicker(ReAgentAuraRule rule)
     {
         DrawColorEdit("Color", rule.Color, color => rule.Color = color);
     }
 
-    private static void DrawManualIconPath(ExileAuraRule rule)
+    private static void DrawManualIconPath(ReAgentAuraRule rule)
     {
         ImGui.PushItemWidth(520);
         var manualIconPath = rule.ManualIconPath ?? string.Empty;
         if (ImGui.InputText("Manual Icon PNG Path", ref manualIconPath, 512))
         {
             rule.ManualIconPath = manualIconPath;
-            rule.IconTextureKey = ExileAuraTextureKeys.Icon(rule);
+            rule.IconTextureKey = ReAgentAuraTextureKeys.Icon(rule);
         }
 
         ImGui.PopItemWidth();
     }
 
-    private void DrawIconExtraction(ExileAuraRule rule)
+    private void DrawIconExtraction(ReAgentAuraRule rule)
     {
         RefreshPendingIconStatus(rule);
         var source = ResolveIconSource(rule.SourceName);
@@ -153,16 +153,16 @@ public sealed partial class ExileAurasModule
         }
     }
 
-    private void DrawDisplays(ExileAuraRule rule)
+    private void DrawDisplays(ReAgentAuraRule rule)
     {
-        if (!ImGui.TreeNodeEx("Displays###exileAuraDisplays", ImGuiTreeNodeFlags.DefaultOpen))
+        if (!ImGui.TreeNodeEx("Displays###reAgentAuraDisplays", ImGuiTreeNodeFlags.DefaultOpen))
         {
             return;
         }
 
         if (ImGui.Button("Add Display"))
         {
-            var display = ExileAuraDisplay.Create(ExileAuraDisplayEffect.ShowTimer);
+            var display = ReAgentAuraDisplay.Create(ReAgentAuraDisplayEffect.ShowTimer);
             display.Name = GetNewDisplayName(rule);
             rule.Displays.Add(display);
         }
@@ -177,7 +177,7 @@ public sealed partial class ExileAurasModule
         ImGui.TreePop();
     }
 
-    private void DrawDisplayRow(ExileAuraRule rule, ExileAuraDisplay display, int index)
+    private void DrawDisplayRow(ReAgentAuraRule rule, ReAgentAuraDisplay display, int index)
     {
         if (string.IsNullOrWhiteSpace(display.Id))
         {
@@ -204,7 +204,7 @@ public sealed partial class ExileAurasModule
         ImGui.PopID();
     }
 
-    private static void DrawDisplayEditor(ExileAuraDisplay display)
+    private static void DrawDisplayEditor(ReAgentAuraDisplay display)
     {
         ImGui.PushItemWidth(260);
 
@@ -217,13 +217,13 @@ public sealed partial class ExileAurasModule
         var effect = (int)display.Effect;
         if (ImGui.Combo("Effect", ref effect, DisplayEffectOptions, DisplayEffectOptions.Length))
         {
-            display.Effect = (ExileAuraDisplayEffect)effect;
+            display.Effect = (ReAgentAuraDisplayEffect)effect;
         }
 
         var startPosition = (int)display.StartPosition;
         if (ImGui.Combo("Start Position", ref startPosition, StartPositionOptions, StartPositionOptions.Length))
         {
-            display.StartPosition = (ExileAuraStartPosition)startPosition;
+            display.StartPosition = (ReAgentAuraStartPosition)startPosition;
         }
 
         DrawRangeNode("Offset X", display.OffsetX);
@@ -234,16 +234,16 @@ public sealed partial class ExileAurasModule
         DrawColorEdit("Text Color", display.TextColor, color => display.TextColor = color);
     }
 
-    private static void DrawDisplayNameWarnings(ExileAuraRule rule)
+    private static void DrawDisplayNameWarnings(ReAgentAuraRule rule)
     {
-        var validation = ExileAuraDisplayValidator.Validate(rule);
+        var validation = ReAgentAuraDisplayValidator.Validate(rule);
         if (!validation.Success)
         {
             ImGui.TextColored(Color.Yellow.ToImguiVec4(), validation.Error);
         }
     }
 
-    private static string GetNewDisplayName(ExileAuraRule rule)
+    private static string GetNewDisplayName(ReAgentAuraRule rule)
     {
         var existing = rule.Displays
             .Select(display => display.Name)
@@ -262,18 +262,18 @@ public sealed partial class ExileAurasModule
         return Guid.NewGuid().ToString("N");
     }
 
-    private static string GetDisplayEffectLabel(ExileAuraDisplayEffect effect)
+    private static string GetDisplayEffectLabel(ReAgentAuraDisplayEffect effect)
     {
         var index = (int)effect;
         return index >= 0 && index < DisplayEffectOptions.Length ? DisplayEffectOptions[index] : effect.ToString();
     }
 
-    private void DrawCondition(ExileAuraRule rule, RuleState state)
+    private void DrawCondition(ReAgentAuraRule rule, RuleState state)
     {
         ImGui.TextUnformatted("Condition");
         var source = rule.ConditionSource ?? string.Empty;
         if (ImGui.InputTextMultiline(
-                "##exileAuraCondition",
+                "##reAgentAuraCondition",
                 ref source,
                 10000,
                 new Vector2(ImGui.GetContentRegionAvail().X, Math.Max(ImGui.GetTextLineHeight() * 3f, ImGui.CalcTextSize($"^{source}_").Y + ImGui.GetTextLineHeight()))))
@@ -284,7 +284,7 @@ public sealed partial class ExileAurasModule
         DrawConditionStatus(rule, state);
     }
 
-    private void DrawConditionStatus(ExileAuraRule rule, RuleState state)
+    private void DrawConditionStatus(ReAgentAuraRule rule, RuleState state)
     {
         var evaluation = _conditionCompiler.Evaluate(rule, state);
         if (!string.IsNullOrWhiteSpace(evaluation.Error))

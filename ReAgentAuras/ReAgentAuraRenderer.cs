@@ -9,14 +9,14 @@ using ExileCore2.Shared.Helpers;
 using ImGuiNET;
 using ReAgent.State;
 
-namespace ReAgent.ExileAuras;
+namespace ReAgent.ReAgentAuras;
 
-public sealed partial class ExileAurasModule
+public sealed partial class ReAgentAurasModule
 {
     private static readonly Color PlacementBackgroundColor = Color.FromArgb(120, 0, 0, 0);
     private static readonly Color PlacementFrameColor = Color.FromArgb(210, 235, 190, 90);
 
-    private readonly List<ExileAuraDisplayEntry> _displayEntries = new();
+    private readonly List<ReAgentAuraDisplayEntry> _displayEntries = new();
     private string _draggingRuleId = "";
 
     internal void Render(Profile profile, RuleState state)
@@ -41,12 +41,12 @@ public sealed partial class ExileAurasModule
         _nextPollMs = now + Settings.PollIntervalMs.Value;
         _displayEntries.Clear();
 
-        foreach (var (group, rule) in EnumerateExileAuraRules(profile, state))
+        foreach (var (group, rule) in EnumerateReAgentAuraRules(profile, state))
         {
             var evaluation = _conditionCompiler.Evaluate(rule, state);
             if (evaluation.Active)
             {
-                _displayEntries.Add(new ExileAuraDisplayEntry(group, rule, true, evaluation.Error, evaluation.Displays));
+                _displayEntries.Add(new ReAgentAuraDisplayEntry(group, rule, true, evaluation.Error, evaluation.Displays));
             }
         }
     }
@@ -54,12 +54,12 @@ public sealed partial class ExileAurasModule
     private void DrawAuras(Profile profile, RuleState state)
     {
         var entries = Settings.Unlocked.Value
-            ? EnumerateExileAuraRules(profile, state)
+            ? EnumerateReAgentAuraRules(profile, state)
                 .Select(item =>
                 {
                     var (group, rule) = item;
                     var evaluation = _conditionCompiler.Evaluate(rule, state);
-                    return new ExileAuraDisplayEntry(group, rule, evaluation.Active, evaluation.Error, evaluation.Displays);
+                    return new ReAgentAuraDisplayEntry(group, rule, evaluation.Active, evaluation.Error, evaluation.Displays);
                 })
                 .ToList()
             : _displayEntries;
@@ -76,16 +76,16 @@ public sealed partial class ExileAurasModule
         }
     }
 
-    private IEnumerable<(RuleGroup Group, ExileAuraRule Rule)> EnumerateExileAuraRules(Profile profile, RuleState state)
+    private IEnumerable<(RuleGroup Group, ReAgentAuraRule Rule)> EnumerateReAgentAuraRules(Profile profile, RuleState state)
     {
         return profile.Groups
             .Where(group => Settings.Unlocked.Value ? group.ShouldEvaluateArea(state) : group.ShouldEvaluate(state))
             .SelectMany(group => group.Rules.Select(rule => (Group: group, Rule: rule)))
-            .Where(rule => rule.Rule.Kind == RuleKind.ExileAura && rule.Rule.ExileAura != null)
-            .Select(rule => (rule.Group, rule.Rule.ExileAura));
+            .Where(rule => rule.Rule.Kind == RuleKind.ReAgentAura && rule.Rule.ReAgentAura != null)
+            .Select(rule => (rule.Group, rule.Rule.ReAgentAura));
     }
 
-    private void DrawAura(ExileAuraDisplayEntry entry)
+    private void DrawAura(ReAgentAuraDisplayEntry entry)
     {
         var rule = entry.Rule;
         var position = new Vector2(rule.PositionX.Value, rule.PositionY.Value);
@@ -106,7 +106,7 @@ public sealed partial class ExileAurasModule
         }
     }
 
-    private void DrawUnlockedBounds(ExileAuraDisplayEntry entry, Vector2 position, Vector2 boundsSize)
+    private void DrawUnlockedBounds(ReAgentAuraDisplayEntry entry, Vector2 position, Vector2 boundsSize)
     {
         var rule = entry.Rule;
         _plugin.Graphics.DrawBox(position - new Vector2(7f, 22f), position + boundsSize + new Vector2(7f, 7f), PlacementBackgroundColor, 4f);
@@ -120,7 +120,7 @@ public sealed partial class ExileAurasModule
         _plugin.Graphics.DrawText(label, position - new Vector2(1f, 20f), PlacementFrameColor);
     }
 
-    private void HandleDrag(ExileAuraDisplayEntry entry, Vector2 position, Vector2 size)
+    private void HandleDrag(ReAgentAuraDisplayEntry entry, Vector2 position, Vector2 size)
     {
         if (!Settings.Unlocked.Value)
         {
@@ -176,7 +176,7 @@ public sealed partial class ExileAurasModule
         ImGui.PopStyleVar();
     }
 
-    private static void ApplyDragDelta(ExileAuraDisplayEntry entry)
+    private static void ApplyDragDelta(ReAgentAuraDisplayEntry entry)
     {
         var delta = ImGui.GetIO().MouseDelta;
         if (delta == Vector2.Zero)
@@ -187,8 +187,8 @@ public sealed partial class ExileAurasModule
         if (entry.Group.MoveTogether)
         {
             foreach (var rule in entry.Group.Rules
-                         .Where(rule => rule.Kind == RuleKind.ExileAura && rule.ExileAura != null)
-                         .Select(rule => rule.ExileAura))
+                         .Where(rule => rule.Kind == RuleKind.ReAgentAura && rule.ReAgentAura != null)
+                         .Select(rule => rule.ReAgentAura))
             {
                 ApplyDragDelta(rule, delta);
             }
@@ -199,19 +199,19 @@ public sealed partial class ExileAurasModule
         ApplyDragDelta(entry.Rule, delta);
     }
 
-    private static void ApplyDragDelta(ExileAuraRule rule, Vector2 delta)
+    private static void ApplyDragDelta(ReAgentAuraRule rule, Vector2 delta)
     {
         rule.PositionX.Value = Math.Clamp((int)MathF.Round(rule.PositionX.Value + delta.X), rule.PositionX.Min, rule.PositionX.Max);
         rule.PositionY.Value = Math.Clamp((int)MathF.Round(rule.PositionY.Value + delta.Y), rule.PositionY.Min, rule.PositionY.Max);
     }
 
-    private void DrawAuraIcon(ExileAuraDisplayEntry entry, Vector2 position, float iconSize)
+    private void DrawAuraIcon(ReAgentAuraDisplayEntry entry, Vector2 position, float iconSize)
     {
         var rule = entry.Rule;
         var iconRectSize = new Vector2(iconSize, iconSize);
-        var color = rule.Visual == ExileAuraVisualSource.Color ? rule.Color : Color.FromArgb(180, 45, 45, 45);
+        var color = rule.Visual == ReAgentAuraVisualSource.Color ? rule.Color : Color.FromArgb(180, 45, 45, 45);
         var iconTextureKey = "";
-        var hasIconTexture = rule.Visual is ExileAuraVisualSource.Icon or ExileAuraVisualSource.ManualIcon &&
+        var hasIconTexture = rule.Visual is ReAgentAuraVisualSource.Icon or ReAgentAuraVisualSource.ManualIcon &&
                              TryEnsureRuleIconRegistered(rule, out iconTextureKey);
         var frameWasDrawn = hasIconTexture && TryDrawSelectedFrame(rule, iconTextureKey, position, iconSize);
         var iconWasDrawn = frameWasDrawn || (hasIconTexture && TryDrawRegisteredIcon(iconTextureKey, position, iconSize));
@@ -235,7 +235,7 @@ public sealed partial class ExileAurasModule
         return true;
     }
 
-    private bool TryDrawSelectedFrame(ExileAuraRule rule, string iconTextureKey, Vector2 position, float iconSize)
+    private bool TryDrawSelectedFrame(ReAgentAuraRule rule, string iconTextureKey, Vector2 position, float iconSize)
     {
         if (!TryEnsureFrameRegistered(rule.Frame, out var frameTextureKey, out var layout))
         {
@@ -252,28 +252,28 @@ public sealed partial class ExileAurasModule
         return true;
     }
 
-    private bool TryEnsureRuleIconRegistered(ExileAuraRule rule, out string textureKey)
+    private bool TryEnsureRuleIconRegistered(ReAgentAuraRule rule, out string textureKey)
     {
-        textureKey = string.IsNullOrWhiteSpace(rule.IconTextureKey) ? ExileAuraTextureKeys.Icon(rule) : rule.IconTextureKey;
+        textureKey = string.IsNullOrWhiteSpace(rule.IconTextureKey) ? ReAgentAuraTextureKeys.Icon(rule) : rule.IconTextureKey;
         rule.IconTextureKey = textureKey;
 
-        var iconPath = rule.Visual == ExileAuraVisualSource.ManualIcon ? rule.ManualIconPath : rule.ExtractedPngPath;
+        var iconPath = rule.Visual == ReAgentAuraVisualSource.ManualIcon ? rule.ManualIconPath : rule.ExtractedPngPath;
         return !string.IsNullOrWhiteSpace(iconPath) && File.Exists(iconPath) && TryEnsureImageRegistered(textureKey, iconPath);
     }
 
-    private bool TryEnsureFrameRegistered(string frameName, out string textureKey, out ExileAuraFrameLayout layout)
+    private bool TryEnsureFrameRegistered(string frameName, out string textureKey, out ReAgentAuraFrameLayout layout)
     {
         textureKey = "";
         layout = default;
 
         if (string.IsNullOrWhiteSpace(frameName) ||
-            string.Equals(frameName, ExileAuraFrames.None, StringComparison.Ordinal) ||
-            !ExileAuraFrames.TryGetLayout(frameName, out layout))
+            string.Equals(frameName, ReAgentAuraFrames.None, StringComparison.Ordinal) ||
+            !ReAgentAuraFrames.TryGetLayout(frameName, out layout))
         {
             return false;
         }
 
-        textureKey = ExileAuraTextureKeys.Frame(frameName);
+        textureKey = ReAgentAuraTextureKeys.Frame(frameName);
         var framePath = Path.Combine(ResolveFramesDirectory(), layout.FileName);
         return File.Exists(framePath) && TryEnsureImageRegistered(textureKey, framePath);
     }
@@ -302,7 +302,7 @@ public sealed partial class ExileAurasModule
         return false;
     }
 
-    private void DrawTextDisplays(ExileAuraDisplayEntry entry, Vector2 iconPosition, float iconSize)
+    private void DrawTextDisplays(ReAgentAuraDisplayEntry entry, Vector2 iconPosition, float iconSize)
     {
         foreach (var runtimeDisplay in entry.Displays.Where(display => display.Enabled))
         {
@@ -321,7 +321,7 @@ public sealed partial class ExileAurasModule
         }
     }
 
-    private static string ResolveDisplayText(ExileAuraDisplayRuntime display)
+    private static string ResolveDisplayText(ReAgentAuraDisplayRuntime display)
     {
         if (!string.IsNullOrEmpty(display.TextOverride))
         {
@@ -336,14 +336,14 @@ public sealed partial class ExileAurasModule
         return display.Value;
     }
 
-    private static Vector2 ResolveDisplayTextPosition(ExileAuraDisplay display, Vector2 iconPosition, float iconSize, Vector2 textSize)
+    private static Vector2 ResolveDisplayTextPosition(ReAgentAuraDisplay display, Vector2 iconPosition, float iconSize, Vector2 textSize)
     {
         var position = display.StartPosition switch
         {
-            ExileAuraStartPosition.Top => new Vector2(iconPosition.X + (iconSize - textSize.X) / 2f, iconPosition.Y - textSize.Y),
-            ExileAuraStartPosition.Left => new Vector2(iconPosition.X - textSize.X, iconPosition.Y + (iconSize - textSize.Y) / 2f),
-            ExileAuraStartPosition.Right => new Vector2(iconPosition.X + iconSize, iconPosition.Y + (iconSize - textSize.Y) / 2f),
-            ExileAuraStartPosition.Center => new Vector2(iconPosition.X + (iconSize - textSize.X) / 2f, iconPosition.Y + (iconSize - textSize.Y) / 2f),
+            ReAgentAuraStartPosition.Top => new Vector2(iconPosition.X + (iconSize - textSize.X) / 2f, iconPosition.Y - textSize.Y),
+            ReAgentAuraStartPosition.Left => new Vector2(iconPosition.X - textSize.X, iconPosition.Y + (iconSize - textSize.Y) / 2f),
+            ReAgentAuraStartPosition.Right => new Vector2(iconPosition.X + iconSize, iconPosition.Y + (iconSize - textSize.Y) / 2f),
+            ReAgentAuraStartPosition.Center => new Vector2(iconPosition.X + (iconSize - textSize.X) / 2f, iconPosition.Y + (iconSize - textSize.Y) / 2f),
             _ => new Vector2(iconPosition.X + (iconSize - textSize.X) / 2f, iconPosition.Y + iconSize - textSize.Y)
         };
 

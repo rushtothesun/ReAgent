@@ -1,9 +1,9 @@
 using ExileCore2.Shared.Attributes;
 using ExileCore2.Shared.Nodes;
 
-namespace ReAgent.ExileAuras;
+namespace ReAgent.ReAgentAuras;
 
-public sealed class ExileAurasSettings
+public sealed class ReAgentAurasSettings
 {
     [Menu("Unlocked")]
     public ToggleNode Unlocked { get; set; } = new(true);

@@ -7,36 +7,36 @@ using Microsoft.CodeAnalysis.Scripting;
 using Microsoft.CodeAnalysis.Scripting.Hosting;
 using ReAgent.State;
 
-namespace ReAgent.ExileAuras;
+namespace ReAgent.ReAgentAuras;
 
-internal sealed class ExileAuraConditionCompiler
+internal sealed class ReAgentAuraConditionCompiler
 {
-    private delegate T ScriptFunc<T>(RuleState State, Func<string, ExileAuraDisplayRuntime> Display);
+    private delegate T ScriptFunc<T>(RuleState State, Func<string, ReAgentAuraDisplayRuntime> Display);
 
     private readonly Dictionary<string, CachedCondition> _conditions = new(StringComparer.Ordinal);
 
-    public ExileAuraEvaluation Evaluate(ExileAuraRule rule, RuleState state)
+    public ReAgentAuraEvaluation Evaluate(ReAgentAuraRule rule, RuleState state)
     {
-        var displays = ExileAuraDisplayValidator.CreateDisplayStates(rule, out var displayError);
+        var displays = ReAgentAuraDisplayValidator.CreateDisplayStates(rule, out var displayError);
         if (!string.IsNullOrWhiteSpace(displayError))
         {
-            return new ExileAuraEvaluation(false, displayError, displays);
+            return new ReAgentAuraEvaluation(false, displayError, displays);
         }
 
         foreach (var display in displays)
         {
-            display.Value = ExileAuraDisplayText.BuildDefaultText(display.Display, rule, state);
+            display.Value = ReAgentAuraDisplayText.BuildDefaultText(display.Display, rule, state);
         }
 
         if (string.IsNullOrWhiteSpace(rule.ConditionSource))
         {
-            return new ExileAuraEvaluation(false, "", displays);
+            return new ReAgentAuraEvaluation(false, "", displays);
         }
 
         var condition = GetCompiledCondition(rule);
         if (!string.IsNullOrWhiteSpace(condition.Error))
         {
-            return new ExileAuraEvaluation(false, condition.Error, displays);
+            return new ReAgentAuraEvaluation(false, condition.Error, displays);
         }
 
         try
@@ -44,7 +44,7 @@ internal sealed class ExileAuraConditionCompiler
             var lookup = displays
                 .Where(x => !string.IsNullOrWhiteSpace(x.Name))
                 .ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
-            ExileAuraDisplayRuntime Display(string name)
+            ReAgentAuraDisplayRuntime Display(string name)
             {
                 if (lookup.TryGetValue(name, out var display))
                 {
@@ -54,17 +54,17 @@ internal sealed class ExileAuraConditionCompiler
                 throw new KeyNotFoundException($"Display '{name}' was not found on this rule.");
             }
 
-            return new ExileAuraEvaluation(condition.Func?.Invoke(state, Display) == true, "", displays);
+            return new ReAgentAuraEvaluation(condition.Func?.Invoke(state, Display) == true, "", displays);
         }
         catch (Exception ex)
         {
-            return new ExileAuraEvaluation(false, $"Exception while evaluating: {ex.Message}", displays);
+            return new ReAgentAuraEvaluation(false, $"Exception while evaluating: {ex.Message}", displays);
         }
     }
 
-    public ExileAuraValidationResult Validate(ExileAuraRule rule)
+    public ReAgentAuraValidationResult Validate(ReAgentAuraRule rule)
     {
-        var displayValidation = ExileAuraDisplayValidator.Validate(rule);
+        var displayValidation = ReAgentAuraDisplayValidator.Validate(rule);
         if (!displayValidation.Success)
         {
             return displayValidation;
@@ -72,16 +72,16 @@ internal sealed class ExileAuraConditionCompiler
 
         if (string.IsNullOrWhiteSpace(rule.ConditionSource))
         {
-            return ExileAuraValidationResult.Ok();
+            return ReAgentAuraValidationResult.Ok();
         }
 
         var condition = GetCompiledCondition(rule);
         return string.IsNullOrWhiteSpace(condition.Error)
-            ? ExileAuraValidationResult.Ok()
-            : ExileAuraValidationResult.Fail(condition.Error);
+            ? ReAgentAuraValidationResult.Ok()
+            : ReAgentAuraValidationResult.Fail(condition.Error);
     }
 
-    private CompiledCondition GetCompiledCondition(ExileAuraRule rule)
+    private CompiledCondition GetCompiledCondition(ReAgentAuraRule rule)
     {
         var source = rule.ConditionSource ?? string.Empty;
         if (_conditions.TryGetValue(rule.Id, out var cached) &&
@@ -102,7 +102,7 @@ internal sealed class ExileAuraConditionCompiler
             var func = DelegateCompiler.CompileDelegate<ScriptFunc<bool>>(
                 source,
                 ScriptCompilerSupport.ScriptOptions,
-                ScriptCompilerSupport.CreateAssemblyLoadContext("ExileAura"));
+                ScriptCompilerSupport.CreateAssemblyLoadContext("ReAgentAura"));
             return new CompiledCondition((state, display) => func(state, display), "");
         }
         catch (Exception ex)
@@ -112,7 +112,7 @@ internal sealed class ExileAuraConditionCompiler
     }
 
     private sealed record CachedCondition(string Source, Lazy<CompiledCondition> Condition);
-    private sealed record CompiledCondition(Func<RuleState, Func<string, ExileAuraDisplayRuntime>, bool> Func, string Error);
+    private sealed record CompiledCondition(Func<RuleState, Func<string, ReAgentAuraDisplayRuntime>, bool> Func, string Error);
 }
 
-internal sealed record ExileAuraEvaluation(bool Active, string Error, IReadOnlyCollection<ExileAuraDisplayRuntime> Displays);
+internal sealed record ReAgentAuraEvaluation(bool Active, string Error, IReadOnlyCollection<ReAgentAuraDisplayRuntime> Displays);

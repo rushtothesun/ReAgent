@@ -2,11 +2,11 @@ using System;
 using System.Linq;
 using ReAgent.State;
 
-namespace ReAgent.ExileAuras;
+namespace ReAgent.ReAgentAuras;
 
-internal static class ExileAuraDisplayText
+internal static class ReAgentAuraDisplayText
 {
-    public static string BuildDefaultText(ExileAuraDisplay display, ExileAuraRule rule, RuleState state)
+    public static string BuildDefaultText(ReAgentAuraDisplay display, ReAgentAuraRule rule, RuleState state)
     {
         if (string.IsNullOrWhiteSpace(rule.SourceName))
         {
@@ -24,10 +24,10 @@ internal static class ExileAuraDisplayText
 
         return display.Effect switch
         {
-            ExileAuraDisplayEffect.ShowTimer => FormatTimer(rows.Select(x => (float)x.TimeLeft).Where(IsFiniteTimer).DefaultIfEmpty(float.PositiveInfinity).Min()),
-            ExileAuraDisplayEffect.ShowCharges => rows.Max(x => x.Charges).ToString(),
-            ExileAuraDisplayEffect.ShowInstanceCount => rows.Count.ToString(),
-            ExileAuraDisplayEffect.ShowStack => rows.Max(x => x.Stacks).ToString(),
+            ReAgentAuraDisplayEffect.ShowTimer => FormatTimer(rows.Select(x => (float)x.TimeLeft).Where(IsFiniteTimer).DefaultIfEmpty(float.PositiveInfinity).Min()),
+            ReAgentAuraDisplayEffect.ShowCharges => rows.Max(x => x.Charges).ToString(),
+            ReAgentAuraDisplayEffect.ShowInstanceCount => rows.Count.ToString(),
+            ReAgentAuraDisplayEffect.ShowStack => rows.Max(x => x.Stacks).ToString(),
             _ => ""
         };
     }

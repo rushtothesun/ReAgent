@@ -1,8 +1,8 @@
-namespace ReAgent.ExileAuras;
+namespace ReAgent.ReAgentAuras;
 
-internal static class ExileAuraTextureKeys
+internal static class ReAgentAuraTextureKeys
 {
-    public static string Icon(ExileAuraRule rule)
+    public static string Icon(ReAgentAuraRule rule)
     {
         return $"exileauras_icon_{rule.Id}";
     }

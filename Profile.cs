@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -8,7 +8,7 @@ using ExileCore2;
 using ExileCore2.Shared.Helpers;
 using ImGuiNET;
 using Newtonsoft.Json;
-using ReAgent.ExileAuras;
+using ReAgent.ReAgentAuras;
 using ReAgent.State;
 using Vector2 = System.Numerics.Vector2;
 using Vector4 = System.Numerics.Vector4;
@@ -105,7 +105,7 @@ public class Profile
         }
     }
 
-    private unsafe void DrawSettingsVertical(RuleState state, ReAgentSettings settings, ExileAurasModule exileAuras)
+    private unsafe void DrawSettingsVertical(RuleState state, ReAgentSettings settings, ReAgentAurasModule reAgentAuras)
     {
         if (ImGui.BeginChild("left", new Vector2(settings.PluginSettings.VerticalTabContainerWidth.Value, 0)))
         {
@@ -234,22 +234,22 @@ public class Profile
         ImGui.BeginChild("item");
         if (Groups.Count > _selectedGroupIndex)
         {
-            Groups[_selectedGroupIndex].DrawSettings(state, settings, exileAuras);
+            Groups[_selectedGroupIndex].DrawSettings(state, settings, reAgentAuras);
         }
 
         ImGui.EndChild();
         ImGui.EndGroup();
     }
 
-    public void DrawSettings(RuleState state, ReAgentSettings settings, ExileAurasModule exileAuras)
+    public void DrawSettings(RuleState state, ReAgentSettings settings, ReAgentAurasModule reAgentAuras)
     {
         if (settings.PluginSettings.EnableVerticalGroupTabs)
         {
-            DrawSettingsVertical(state, settings, exileAuras);
+            DrawSettingsVertical(state, settings, reAgentAuras);
         }
         else
         {
-            DrawSettingsHorizontal(state, settings, exileAuras);
+            DrawSettingsHorizontal(state, settings, reAgentAuras);
         }
 
         DrawGroupImport();
@@ -261,7 +261,7 @@ public class Profile
         _groupImportObject = null;
     }
 
-    private void DrawSettingsHorizontal(RuleState state, ReAgentSettings settings, ExileAurasModule exileAuras)
+    private void DrawSettingsHorizontal(RuleState state, ReAgentSettings settings, ReAgentAurasModule reAgentAuras)
     {
             if (ImGui.BeginTabBar("Rule groups", ImGuiTabBarFlags.AutoSelectNewTabs | ImGuiTabBarFlags.Reorderable | ImGuiTabBarFlags.FittingPolicyScroll))
             {
@@ -318,7 +318,7 @@ public class Profile
 
                 if (isSelected)
                 {
-                    group.DrawSettings(state, settings, exileAuras);
+                    group.DrawSettings(state, settings, reAgentAuras);
                     ImGui.EndTabItem();
                 }
 
@@ -367,9 +367,9 @@ public class Profile
             ImGui.CloseCurrentPopup();
         }
 
-        if (ImGui.Button("ExileAura Rule"))
+        if (ImGui.Button("ReAgentAura Rule"))
         {
-            AddRuleGroup(RuleKind.ExileAura);
+            AddRuleGroup(RuleKind.ReAgentAura);
             ImGui.CloseCurrentPopup();
         }
 
@@ -381,7 +381,7 @@ public class Profile
         var group = new RuleGroup(GetNewRuleGroupName(), kind);
         group.Rules.Add(kind switch
         {
-            RuleKind.ExileAura => Rule.CreateExileAura(),
+            RuleKind.ReAgentAura => Rule.CreateReAgentAura(),
             _ => new Rule("false", 1)
         });
 
@@ -391,6 +391,6 @@ public class Profile
 
     private static string GetGroupKindPrefix(RuleGroup group)
     {
-        return group.EffectiveKind == RuleKind.ExileAura ? "E" : "R";
+        return group.EffectiveKind == RuleKind.ReAgentAura ? "A" : "R";
     }
 }

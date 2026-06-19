@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -14,7 +14,7 @@ using ExileCore2.Shared.Helpers;
 using ExileCore2.Shared.Nodes;
 using ImGuiNET;
 using Newtonsoft.Json;
-using ReAgent.ExileAuras;
+using ReAgent.ReAgentAuras;
 using ReAgent.SideEffects;
 using ReAgent.State;
 using RectangleF = ExileCore2.Shared.RectangleF;
@@ -28,7 +28,7 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
     private readonly RuleInternalState _internalState = new RuleInternalState();
     private readonly ConditionalWeakTable<Profile, string> _pendingNames = new ConditionalWeakTable<Profile, string>();
     private readonly HashSet<string> _loadedTextures = new();
-    private ExileAurasModule _exileAuras;
+    private ReAgentAurasModule _reAgentAuras;
     private RuleState _state;
     private List<SideEffectContainer> _pendingSideEffects = new List<SideEffectContainer>();
     private string _profileToDelete = null;
@@ -38,8 +38,8 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
     public override bool Initialise()
     {
         ProcessID = GameController.Window.Process.Id;
-        _exileAuras = new ExileAurasModule(this);
-        _exileAuras.Initialise();
+        _reAgentAuras = new ReAgentAurasModule(this);
+        _reAgentAuras.Initialise();
 
         var stringData = File.ReadAllText(Path.Join(DirectoryFullName, "CustomAilments.json"));
         CustomAilments = JsonConvert.DeserializeObject<Dictionary<string, List<string>>>(stringData);
@@ -136,7 +136,7 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
     public override void DrawSettings()
     {
         base.DrawSettings();
-        _exileAuras.DrawSettings();
+        _reAgentAuras.DrawSettings();
         DrawProfileImport();
 
         try
@@ -258,7 +258,7 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
                                 }
                             }
 
-                            profile.DrawSettings(_state, Settings, _exileAuras);
+                            profile.DrawSettings(_state, Settings, _reAgentAuras);
                             ImGui.EndTabItem();
                         }
                     }
@@ -396,9 +396,9 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
 
         if (!shouldExecute && !Settings.InspectState && !Settings.ShowControllerState)
         {
-            if (Settings.ExileAuras.Unlocked.Value)
+            if (Settings.ReAgentAuras.Unlocked.Value)
             {
-                _exileAuras.Render(profile, _state);
+                _reAgentAuras.Render(profile, _state);
             }
 
             return;
@@ -416,9 +416,9 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
 
         if (!shouldExecute)
         {
-            if (Settings.ExileAuras.Unlocked.Value)
+            if (Settings.ReAgentAuras.Unlocked.Value)
             {
-                _exileAuras.Render(profile, _state);
+                _reAgentAuras.Render(profile, _state);
             }
 
             return;
@@ -524,7 +524,7 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
             Graphics.DrawText(text, position, ColorFromName(color));
         }
 
-        _exileAuras.Render(profile, _state);
+        _reAgentAuras.Render(profile, _state);
     }
 
     private void DrawControllerStateWindow(RuleState state)

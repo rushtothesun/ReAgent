@@ -1,9 +1,9 @@
 using System.IO;
 using LibBundledGGPK3;
 
-namespace ReAgent.ExileAuras;
+namespace ReAgent.ReAgentAuras;
 
-internal static class ExileAuraGgpk
+internal static class ReAgentAuraGgpk
 {
     public static BundledGGPK Open(string ggpkPath)
     {

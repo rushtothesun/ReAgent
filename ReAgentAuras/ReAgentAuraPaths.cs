@@ -1,9 +1,9 @@
 using System;
 using System.IO;
 
-namespace ReAgent.ExileAuras;
+namespace ReAgent.ReAgentAuras;
 
-internal static class ExileAuraPaths
+internal static class ReAgentAuraPaths
 {
     public static bool IsInsideDirectory(string root, string path)
     {

@@ -12,7 +12,7 @@ The core rule model is still "if this, then that":
 The POE2 version has two rule systems:
 
 - **ReAgent rules**: automation rules that press keys or run `SideEffect` actions.
-- **ExileAura rules**: visual overlay rules that show icons and text displays.
+- **ReAgentAura rules**: visual overlay rules that show icons and text displays.
 
 ## 2. Core Concepts
 
@@ -20,7 +20,7 @@ ReAgent configuration is organized hierarchically:
 
 - **Profiles**: Top-level containers for different characters, builds, or activities. One profile is active at a time.
 - **Rule Groups**: A profile contains groups. Groups can be enabled or disabled as a unit and restricted by area type.
-- **Rules**: A group contains rules. ReAgent groups contain automation rules. ExileAura groups contain visual aura rules.
+- **Rules**: A group contains rules. ReAgent groups contain automation rules. ReAgentAura groups contain visual aura rules.
 
 Profiles can be exported or imported from the profile controls. Groups can be exported from the group controls.
 
@@ -29,9 +29,9 @@ Groups are created from the group `+` button. The popup lets you choose:
 | Group Type | Description |
 | ---------- | ----------- |
 | `ReAgent Rule` | Creates a normal automation group. |
-| `ExileAura Rule` | Creates a visual overlay group. |
+| `ReAgentAura Rule` | Creates a visual overlay group. |
 
-Group tabs are prefixed with `[R]` for ReAgent groups and `[E]` for ExileAura groups.
+Group tabs are prefixed with `[R]` for ReAgent groups and `[A]` for ReAgentAura groups.
 
 ### 2.1. Group Controls
 
@@ -48,17 +48,17 @@ Every group has these controls:
 | `Export group` | Copies the group as an importable encoded string. |
 | `Use Group Condition` | Enables a group-wide C# condition. |
 
-ExileAura groups also have:
+ReAgentAura groups also have:
 
 | Control | Description |
 | ------- | ----------- |
-| `Move Together` | When ExileAuras are unlocked, dragging one aura in the group moves all ExileAura rules in that group by the same mouse delta. |
+| `Move Together` | When ReAgentAuras are unlocked, dragging one aura in the group moves all ReAgentAura rules in that group by the same mouse delta. |
 
 ### 2.2. Group Conditions
 
 A group condition is optional. If enabled, it must return `true` before any rule in that group runs.
 
-Group condition code uses the V2 C# syntax and receives `State`. It does not receive ExileAura `Display("name")`, because it gates the whole group rather than one aura rule.
+Group condition code uses the V2 C# syntax and receives `State`. It does not receive ReAgentAura `Display("name")`, because it gates the whole group rather than one aura rule.
 
 Example: prevent a group from running while major panels are open.
 
@@ -70,7 +70,7 @@ return !State.IsChatOpen
     && !State.IsAnyLargePanelOpen;
 ```
 
-For ExileAura groups, unlocked layout mode ignores the group condition so auras can still be placed. Normal locked rendering respects the group condition.
+For ReAgentAura groups, unlocked layout mode ignores the group condition so auras can still be placed. Normal locked rendering respects the group condition.
 
 ## 3. Rule Engine
 
@@ -84,7 +84,7 @@ Automation actions are paused when:
 - The player `Life`, `Buffs`, or `Actor` component cannot be read.
 - The player has `grace_period` and `IgnoreGracePeriod` is false.
 
-When automation is paused, ReAgent rules do not fire. ExileAuras can still render while unlocked so you can move and arrange them.
+When automation is paused, ReAgent rules do not fire. ReAgentAuras can still render while unlocked so you can move and arrange them.
 
 Key presses are throttled by `GlobalKeyPressCooldown`. A queued key press cannot be sent until the cooldown has elapsed and chat is not open.
 
@@ -98,7 +98,7 @@ A ReAgent rule has an `Action type`.
 | `SingleSideEffect` | `ISideEffect` | Returns one action object, such as `new RestartTimerSideEffect("name")`. Return `null` when no action should run. |
 | `MultipleSideEffects` | `IEnumerable<ISideEffect>` | Returns multiple action objects. Return an empty collection when no action should run. |
 
-ExileAura rules do not use these action types. ExileAura condition code returns `bool` and may enable display outputs with `Display("name")`.
+ReAgentAura rules do not use these action types. ReAgentAura condition code returns `bool` and may enable display outputs with `Display("name")`.
 
 ### 3.2. V1 vs V2 Syntax
 
@@ -155,7 +155,7 @@ return new ISideEffect[]
 
 ### 3.3. V2 Script Imports
 
-V2 ReAgent rules, group conditions, and ExileAura conditions share the same base imports.
+V2 ReAgent rules, group conditions, and ReAgentAura conditions share the same base imports.
 
 Commonly useful imports include:
 
@@ -167,7 +167,7 @@ Commonly useful imports include:
 - `ReAgent`
 - `ReAgent.State`
 - `ReAgent.SideEffects`
-- `ReAgent.ExileAuras`
+- `ReAgent.ReAgentAuras`
 - `ExileCore2`
 - `ExileCore2.Shared`
 - `ExileCore2.Shared.Enums`
@@ -442,7 +442,7 @@ return State.Vitals.HP.Percent < 40 ||
 | `Has(string id)` | `bool` | True if a buff with this internal name exists. |
 | `AllBuffs` | `List<StatusEffect>` | All buff rows, including duplicates. |
 
-Duplicate buff rows matter. POE2 effects can expose stacks as repeated buff rows rather than a single row with a stack count. For those, use `AllBuffs.Count(...)` or ExileAuras `Show Instance Count`.
+Duplicate buff rows matter. POE2 effects can expose stacks as repeated buff rows rather than a single row with a stack count. For those, use `AllBuffs.Count(...)` or ReAgentAuras `Show Instance Count`.
 
 `StatusEffect` contains:
 
@@ -628,7 +628,7 @@ return new ISideEffect[]
 
 ### 6.3. Display Side Effects
 
-Display side effects are immediate ReAgent drawing actions. They are separate from ExileAuras.
+Display side effects are immediate ReAgent drawing actions. They are separate from ReAgentAuras.
 
 | SideEffect | Description |
 | ---------- | ----------- |
@@ -660,11 +660,11 @@ return new ProgressBarSideEffect(
 | `DisconnectSideEffect()` | Attempts to close TCP connections for the game process. |
 | `PluginBridgeSideEffect<T>(string MethodName, Action<T> InvokeFunctionAction)` | Calls an ExileCore PluginBridge method. |
 
-## 7. ExileAuras
+## 7. ReAgentAuras
 
-ExileAuras is a visual aura system built into ReAgent. It is inspired by WeakAuras-style overlays: create icons, choose visuals, add optional text displays, and control them with condition code.
+ReAgentAuras is a visual aura system built into ReAgent. It is inspired by WeakAuras-style overlays: create icons, choose visuals, add optional text displays, and control them with condition code.
 
-Create ExileAuras by making an `ExileAura Rule` group from the group `+` button. In an ExileAura group, `Add New Rule` adds another ExileAura rule.
+Create ReAgentAuras by making a `ReAgentAura Rule` group from the group `+` button. In a ReAgentAura group, `Add New Rule` adds another ReAgentAura rule.
 
 ### 7.1. Rule Fields
 
@@ -673,7 +673,7 @@ Create ExileAuras by making an `ExileAura Rule` group from the group `+` button.
 | `Rule Name` | Display/editor name for the aura. |
 | `Source Name` | Internal buff or skill name used for default display values and icon extraction. |
 | `Frame` | Optional overlay frame. Options are `None`, `buff`, `charges`, `debuff`, `minionframe`, and `nopausebuffframe`. |
-| `Position X` / `Position Y` | Screen position of the icon. Can also be changed by dragging while ExileAuras are unlocked. |
+| `Position X` / `Position Y` | Screen position of the icon. Can also be changed by dragging while ReAgentAuras are unlocked. |
 | `Icon Size` | Screen size of the icon. |
 | `Visual` | One of `Color`, `Icon`, or `Manual Icon`. |
 
@@ -695,7 +695,7 @@ Buffs without an exposed icon DDS path need `Manual Icon` or a different source.
 
 ### 7.3. Asset Extraction
 
-ExileAura extraction settings live under the `ExileAuras` settings header.
+ReAgentAura extraction settings live under the `ReAgentAuras` settings header.
 
 | Control | Description |
 | ------- | ----------- |
@@ -710,8 +710,8 @@ Extracted assets are written under the plugin config directory:
 
 | Asset Type | Output Folder |
 | ---------- | ------------- |
-| Frames | `ExileAuras/Frames` |
-| Icons | `ExileAuras/Icons` |
+| Frames | `ReAgentAuras/Frames` |
+| Icons | `ReAgentAuras/Icons` |
 
 DDS files are temporary. ReAgent converts them to PNG and removes the DDS when icon extraction succeeds.
 
@@ -741,13 +741,13 @@ If a selected frame is not extracted yet, the editor shows `Frame not extracted.
 
 ### 7.5. Displays
 
-Displays are optional text outputs attached to an ExileAura rule.
+Displays are optional text outputs attached to a ReAgentAura rule.
 
 Each display has:
 
 | Field | Description |
 | ----- | ----------- |
-| `Name` | Required. Must be unique within the same ExileAura rule. Other rules may reuse the same display name. |
+| `Name` | Required. Must be unique within the same ReAgentAura rule. Other rules may reuse the same display name. |
 | `Effect` | Default value provider. |
 | `Start Position` | Initial anchor relative to the icon: `Bottom`, `Top`, `Left`, `Right`, or `Center`. |
 | `Offset X` / `Offset Y` | Screen-space offset from the start position. |
@@ -767,7 +767,7 @@ The default display `Value` is buff-based. For text based on a skill, cooldown, 
 
 ### 7.6. Condition Code
 
-ExileAura condition code is V2-style C# with two parameters:
+ReAgentAura condition code is V2-style C# with two parameters:
 
 | Parameter | Description |
 | --------- | ----------- |
@@ -789,9 +789,9 @@ Display text resolution order is:
 2. `Text`, if not empty.
 3. `Value`, the default value from the selected display effect.
 
-`Display("Name")` only searches displays on the same ExileAura rule. It does not affect displays in other rules, even if they have the same name.
+`Display("Name")` only searches displays on the same ReAgentAura rule. It does not affect displays in other rules, even if they have the same name.
 
-`Display("Name")` returns an `ExileAuraDisplayRuntime`.
+`Display("Name")` returns a `ReAgentAuraDisplayRuntime`.
 
 | Property | Type | Description |
 | -------- | ---- | ----------- |
@@ -861,7 +861,7 @@ return count > 0;
 
 ### 7.7. Limitations and Notes
 
-- ExileAura displays are text outputs. The icon itself is controlled by the condition return value and visual settings.
+- ReAgentAura displays are text outputs. The icon itself is controlled by the condition return value and visual settings.
 - Default display values are sourced from player buffs matching `Source Name`.
 - Skills can expose useful cooldown and use data through `State.Skills`, but not every game UI counter is exposed as structured API data.
 - Icon extraction requires the standalone POE2 `Content.ggpk`. Steam installs may not have a `Content.ggpk` file.
@@ -934,12 +934,12 @@ Top-level settings:
 | `VerticalTabContainerWidth` | `150` | Width of the vertical group tab column. |
 | `IgnoreGracePeriod` | `false` | Allows actions during `grace_period`. |
 
-`ExileAuras` settings:
+`ReAgentAuras` settings:
 
 | Setting | Default | Description |
 | ------- | ------- | ----------- |
-| `Unlocked` | `true` | Allows ExileAura icons to be dragged. |
-| `Poll Interval Ms` | `100` | Poll interval for ExileAura condition evaluation. |
+| `Unlocked` | `true` | Allows ReAgentAura icons to be dragged. |
+| `Poll Interval Ms` | `100` | Poll interval for ReAgentAura condition evaluation. |
 | `Enable Extraction` | `true` | Enables extraction controls for frames and icons. |
 | `Content.ggpk Path` | empty | Path to POE2 standalone `Content.ggpk`. |
 
@@ -1005,9 +1005,9 @@ if (!skill.Exists || !skill.IsUsing)
 return new RestartTimerSideEffect("mirage-used");
 ```
 
-### 11.4. Show an ExileAura When a Skill Is Off Cooldown
+### 11.4. Show a ReAgentAura When a Skill Is Off Cooldown
 
-ExileAura fields:
+ReAgentAura fields:
 
 - `Source Name`: `create_mirage`
 - `Visual`: `Icon` or `Manual Icon`

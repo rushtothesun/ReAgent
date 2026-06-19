@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Numerics;
@@ -6,7 +6,7 @@ using ExileCore2;
 using ExileCore2.Shared.Helpers;
 using ImGuiNET;
 using Newtonsoft.Json;
-using ReAgent.ExileAuras;
+using ReAgent.ReAgentAuras;
 using ReAgent.SideEffects;
 using ReAgent.State;
 
@@ -38,11 +38,11 @@ public class RuleGroup
     }
 
     [JsonIgnore]
-    public RuleKind EffectiveKind => Kind == RuleKind.ExileAura || Rules.Any(rule => rule.Kind == RuleKind.ExileAura)
-        ? RuleKind.ExileAura
+    public RuleKind EffectiveKind => Kind == RuleKind.ReAgentAura || Rules.Any(rule => rule.Kind == RuleKind.ReAgentAura)
+        ? RuleKind.ReAgentAura
         : RuleKind.ReAgent;
 
-    public void DrawSettings(RuleState state, ReAgentSettings settings, ExileAurasModule exileAuras)
+    public void DrawSettings(RuleState state, ReAgentSettings settings, ReAgentAurasModule reAgentAuras)
     {
         using (settings.PluginSettings.ColorEnableToggles ? ImGuiHelpers.UseStyleColor(ImGuiCol.Text, Color.Lime.ToImguiVec4()) : null)
             ImGui.Checkbox("Enable", ref Enabled);
@@ -92,7 +92,7 @@ public class RuleGroup
             ImGui.SetClipboardText(DataExporter.ExportDataBase64(this, "reagent_group_v1", new JsonSerializerSettings()));
         }
 
-        if (EffectiveKind == RuleKind.ExileAura)
+        if (EffectiveKind == RuleKind.ReAgentAura)
         {
             ImGui.SameLine();
             ImGui.Checkbox("Move Together", ref MoveTogether);
@@ -118,7 +118,7 @@ public class RuleGroup
             if (ImGui.BeginDragDropSource())
             {
                 ImguiExt.SetDragDropPayload("RuleIndex", i);
-                Rules[i].Display(state, false, exileAuras);
+                Rules[i].Display(state, false, reAgentAuras);
                 ImGui.EndDragDropSource();
             }
             else if (ImGui.IsItemHovered())
@@ -143,7 +143,7 @@ public class RuleGroup
             }
 
             ImGui.SameLine();
-            Rules[i].Display(state, _expand, exileAuras);
+            Rules[i].Display(state, _expand, reAgentAuras);
             ImguiExt.DrawLargeTransparentSelectable("##DragTarget", dropTargetStart);
             if (ImGui.BeginDragDropTarget())
             {
@@ -280,7 +280,7 @@ public class RuleGroup
     {
         return EffectiveKind switch
         {
-            RuleKind.ExileAura => Rule.CreateExileAura(),
+            RuleKind.ReAgentAura => Rule.CreateReAgentAura(),
             _ => new Rule("false", 1)
         };
     }

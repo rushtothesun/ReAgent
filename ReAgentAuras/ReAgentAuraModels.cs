@@ -4,16 +4,16 @@ using System.Drawing;
 using ExileCore2.Shared.Attributes;
 using ExileCore2.Shared.Nodes;
 
-namespace ReAgent.ExileAuras;
+namespace ReAgent.ReAgentAuras;
 
-public enum ExileAuraVisualSource
+public enum ReAgentAuraVisualSource
 {
     Color,
     Icon,
     ManualIcon
 }
 
-public enum ExileAuraDisplayEffect
+public enum ReAgentAuraDisplayEffect
 {
     ShowTimer,
     ShowCharges,
@@ -21,7 +21,7 @@ public enum ExileAuraDisplayEffect
     ShowStack
 }
 
-public enum ExileAuraStartPosition
+public enum ReAgentAuraStartPosition
 {
     Bottom,
     Top,
@@ -30,13 +30,13 @@ public enum ExileAuraStartPosition
     Center
 }
 
-public sealed class ExileAuraRule
+public sealed class ReAgentAuraRule
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
-    public string Name { get; set; } = "New ExileAura";
+    public string Name { get; set; } = "New ReAgentAura";
     public string SourceName { get; set; } = "";
     public string Frame { get; set; } = "None";
-    public ExileAuraVisualSource Visual { get; set; } = ExileAuraVisualSource.Color;
+    public ReAgentAuraVisualSource Visual { get; set; } = ReAgentAuraVisualSource.Color;
     public RangeNode<int> PositionX { get; set; } = new(760, 0, 4000);
     public RangeNode<int> PositionY { get; set; } = new(500, 0, 2500);
     public RangeNode<int> IconSize { get; set; } = new(64, 24, 160);
@@ -45,15 +45,15 @@ public sealed class ExileAuraRule
     public string ExtractedPngPath { get; set; } = "";
     public string IconTextureKey { get; set; } = "";
     public string ConditionSource { get; set; } = "false";
-    public List<ExileAuraDisplay> Displays { get; set; } = [];
+    public List<ReAgentAuraDisplay> Displays { get; set; } = [];
 }
 
-public sealed class ExileAuraDisplay
+public sealed class ReAgentAuraDisplay
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Name { get; set; } = "New Display";
-    public ExileAuraDisplayEffect Effect { get; set; } = ExileAuraDisplayEffect.ShowTimer;
-    public ExileAuraStartPosition StartPosition { get; set; } = ExileAuraStartPosition.Bottom;
+    public ReAgentAuraDisplayEffect Effect { get; set; } = ReAgentAuraDisplayEffect.ShowTimer;
+    public ReAgentAuraStartPosition StartPosition { get; set; } = ReAgentAuraStartPosition.Bottom;
     [Menu("Offset X")]
     public RangeNode<int> OffsetX { get; set; } = new(0, -2000, 2000);
     [Menu("Offset Y")]
@@ -62,9 +62,9 @@ public sealed class ExileAuraDisplay
     public RangeNode<float> TextScale { get; set; } = new(1.0f, 0.5f, 2.0f);
     public Color TextColor { get; set; } = Color.FromArgb(255, 240, 240, 240);
 
-    public static ExileAuraDisplay Create(ExileAuraDisplayEffect effect)
+    public static ReAgentAuraDisplay Create(ReAgentAuraDisplayEffect effect)
     {
-        return new ExileAuraDisplay
+        return new ReAgentAuraDisplay
         {
             Effect = effect,
             StartPosition = DefaultStartPosition(effect),
@@ -72,34 +72,34 @@ public sealed class ExileAuraDisplay
         };
     }
 
-    private static ExileAuraStartPosition DefaultStartPosition(ExileAuraDisplayEffect effect)
+    private static ReAgentAuraStartPosition DefaultStartPosition(ReAgentAuraDisplayEffect effect)
     {
         return effect switch
         {
-            ExileAuraDisplayEffect.ShowCharges => ExileAuraStartPosition.Top,
-            ExileAuraDisplayEffect.ShowInstanceCount => ExileAuraStartPosition.Right,
-            ExileAuraDisplayEffect.ShowStack => ExileAuraStartPosition.Right,
-            _ => ExileAuraStartPosition.Bottom
+            ReAgentAuraDisplayEffect.ShowCharges => ReAgentAuraStartPosition.Top,
+            ReAgentAuraDisplayEffect.ShowInstanceCount => ReAgentAuraStartPosition.Right,
+            ReAgentAuraDisplayEffect.ShowStack => ReAgentAuraStartPosition.Right,
+            _ => ReAgentAuraStartPosition.Bottom
         };
     }
 
-    private static int DefaultOffsetY(ExileAuraDisplayEffect effect)
+    private static int DefaultOffsetY(ReAgentAuraDisplayEffect effect)
     {
-        return effect == ExileAuraDisplayEffect.ShowTimer ? -2 : 0;
+        return effect == ReAgentAuraDisplayEffect.ShowTimer ? -2 : 0;
     }
 }
 
 [Api]
-public sealed class ExileAuraDisplayRuntime
+public sealed class ReAgentAuraDisplayRuntime
 {
-    internal ExileAuraDisplayRuntime(ExileAuraDisplay display)
+    internal ReAgentAuraDisplayRuntime(ReAgentAuraDisplay display)
     {
         Display = display;
         Name = display.Name;
         Enabled = false;
     }
 
-    internal ExileAuraDisplay Display { get; }
+    internal ReAgentAuraDisplay Display { get; }
     [Api]
     public string Name { get; }
     [Api]
@@ -112,7 +112,7 @@ public sealed class ExileAuraDisplayRuntime
     public string TextOverride { get; set; } = "";
 }
 
-public sealed record ExileAuraFrameLayout(
+public sealed record ReAgentAuraFrameLayout(
     string FileName,
     float Width,
     float Height,
@@ -120,11 +120,11 @@ public sealed record ExileAuraFrameLayout(
     float OffsetX,
     float OffsetY);
 
-public sealed record ExileAuraDisplayEntry(
+public sealed record ReAgentAuraDisplayEntry(
     RuleGroup Group,
-    ExileAuraRule Rule,
+    ReAgentAuraRule Rule,
     bool Active,
     string Error,
-    IReadOnlyCollection<ExileAuraDisplayRuntime> Displays);
+    IReadOnlyCollection<ReAgentAuraDisplayRuntime> Displays);
 
-public sealed record ExileAuraIconSource(string DisplayName, string DdsFile);
+public sealed record ReAgentAuraIconSource(string DisplayName, string DdsFile);

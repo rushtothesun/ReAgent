@@ -7,9 +7,9 @@ using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using Image = SixLabors.ImageSharp.Image;
 
-namespace ReAgent.ExileAuras;
+namespace ReAgent.ReAgentAuras;
 
-internal static class ExileAuraDdsConverter
+internal static class ReAgentAuraDdsConverter
 {
     public static void ConvertToPng(byte[] ddsBytes, string outputPath, int targetWidth = 0, int targetHeight = 0)
     {

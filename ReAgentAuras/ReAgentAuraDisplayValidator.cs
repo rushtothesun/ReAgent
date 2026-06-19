@@ -2,15 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace ReAgent.ExileAuras;
+namespace ReAgent.ReAgentAuras;
 
-internal static class ExileAuraDisplayValidator
+internal static class ReAgentAuraDisplayValidator
 {
-    public static List<ExileAuraDisplayRuntime> CreateDisplayStates(ExileAuraRule rule, out string error)
+    public static List<ReAgentAuraDisplayRuntime> CreateDisplayStates(ReAgentAuraRule rule, out string error)
     {
         error = "";
         var displays = (rule.Displays ?? [])
-            .Select(display => new ExileAuraDisplayRuntime(display))
+            .Select(display => new ReAgentAuraDisplayRuntime(display))
             .ToList();
 
         var validation = Validate(rule);
@@ -22,11 +22,11 @@ internal static class ExileAuraDisplayValidator
         return displays;
     }
 
-    public static ExileAuraValidationResult Validate(ExileAuraRule rule)
+    public static ReAgentAuraValidationResult Validate(ReAgentAuraRule rule)
     {
         if ((rule.Displays ?? []).Any(display => string.IsNullOrWhiteSpace(display.Name)))
         {
-            return ExileAuraValidationResult.Fail("Every display needs a name.");
+            return ReAgentAuraValidationResult.Fail("Every display needs a name.");
         }
 
         var duplicateName = (rule.Displays ?? [])
@@ -37,13 +37,13 @@ internal static class ExileAuraDisplayValidator
             .FirstOrDefault();
 
         return string.IsNullOrWhiteSpace(duplicateName)
-            ? ExileAuraValidationResult.Ok()
-            : ExileAuraValidationResult.Fail($"Display name '{duplicateName}' is used more than once on this rule.");
+            ? ReAgentAuraValidationResult.Ok()
+            : ReAgentAuraValidationResult.Fail($"Display name '{duplicateName}' is used more than once on this rule.");
     }
 }
 
-internal sealed record ExileAuraValidationResult(bool Success, string Error)
+internal sealed record ReAgentAuraValidationResult(bool Success, string Error)
 {
-    public static ExileAuraValidationResult Ok() => new(true, "");
-    public static ExileAuraValidationResult Fail(string error) => new(false, error);
+    public static ReAgentAuraValidationResult Ok() => new(true, "");
+    public static ReAgentAuraValidationResult Fail(string error) => new(false, error);
 }

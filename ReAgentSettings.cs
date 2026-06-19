@@ -1,9 +1,9 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using ExileCore2.Shared.Attributes;
 using ExileCore2.Shared.Interfaces;
 using ExileCore2.Shared.Nodes;
 using Newtonsoft.Json;
-using ReAgent.ExileAuras;
+using ReAgent.ReAgentAuras;
 
 namespace ReAgent;
 
@@ -49,7 +49,7 @@ public sealed class ReAgentSettings : ISettings
     }
 
     [IgnoreMenu]
-    public ExileAurasSettings ExileAuras { get; set; } = new();
+    public ReAgentAurasSettings ReAgentAuras { get; set; } = new();
 
     public ToggleNode Enable { get; set; } = new(true);
 }

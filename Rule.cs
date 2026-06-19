@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Dynamic.Core;
@@ -14,7 +14,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Scripting;
 using Microsoft.CodeAnalysis.Scripting.Hosting;
 using Newtonsoft.Json;
-using ReAgent.ExileAuras;
+using ReAgent.ReAgentAuras;
 using ReAgent.SideEffects;
 using ReAgent.State;
 using static ExileCore2.Shared.Nodes.HotkeyNodeV2;
@@ -34,7 +34,7 @@ public class Rule
     public string RuleSource;
     public RuleActionType Type = RuleActionType.Key;
     public RuleKind Kind = RuleKind.ReAgent;
-    public ExileAuraRule ExileAura;
+    public ReAgentAuraRule ReAgentAura;
 
     public Keys? Key
     {
@@ -69,30 +69,30 @@ public class Rule
         ResetFunction();
     }
 
-    public static Rule CreateExileAura()
+    public static Rule CreateReAgentAura()
     {
         return new Rule("false", 2)
         {
-            Kind = RuleKind.ExileAura,
+            Kind = RuleKind.ReAgentAura,
             Type = RuleActionType.SingleSideEffect,
             KeyV2 = null,
             ControllerKeyV2 = null,
-            ExileAura = new ExileAuraRule()
+            ReAgentAura = new ReAgentAuraRule()
         };
     }
 
-    public void Display(RuleState state, bool expand, ExileAurasModule exileAuras = null)
+    public void Display(RuleState state, bool expand, ReAgentAurasModule reAgentAuras = null)
     {
-        if (Kind == RuleKind.ExileAura)
+        if (Kind == RuleKind.ReAgentAura)
         {
-            ExileAura ??= new ExileAuraRule();
-            if (exileAuras == null)
+            ReAgentAura ??= new ReAgentAuraRule();
+            if (reAgentAuras == null)
             {
-                ImGui.TextUnformatted($"ExileAura: {ExileAura.Name}");
+                ImGui.TextUnformatted($"ReAgentAura: {ReAgentAura.Name}");
                 return;
             }
 
-            exileAuras.DrawRuleEditor(ExileAura, state, expand);
+            reAgentAuras.DrawRuleEditor(ReAgentAura, state, expand);
             return;
         }
 
@@ -403,7 +403,7 @@ public class Rule
 
     public IList<ISideEffect> Evaluate(RuleState state)
     {
-        if (Kind == RuleKind.ExileAura)
+        if (Kind == RuleKind.ReAgentAura)
         {
             return [];
         }

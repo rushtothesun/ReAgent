@@ -33,7 +33,7 @@ internal static class ScriptCompilerSupport
                 .AddReferences(metadataReference)
                 .AddImports(
                     "System.Collections.Generic", "System.Linq", "System.Numerics", "System.Windows.Forms", "System",
-                    "ReAgent", "ReAgent.State", "ReAgent.SideEffects", "ReAgent.ExileAuras",
+                    "ReAgent", "ReAgent.State", "ReAgent.SideEffects", "ReAgent.ReAgentAuras",
                     "ExileCore2", "ExileCore2.Shared", "ExileCore2.Shared.Enums",
                     "ExileCore2.Shared.Helpers", "ExileCore2.PoEMemory.Components", "ExileCore2.PoEMemory.MemoryObjects",
                     "ExileCore2.PoEMemory", "ExileCore2.PoEMemory.FilesInMemory",

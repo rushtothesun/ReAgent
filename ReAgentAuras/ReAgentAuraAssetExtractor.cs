@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using LibBundle3.Records;
 
-namespace ReAgent.ExileAuras;
+namespace ReAgent.ReAgentAuras;
 
-internal static class ExileAuraAssetExtractor
+internal static class ReAgentAuraAssetExtractor
 {
     public static AssetExtractionResult ExtractAssets(
         IReadOnlyCollection<AssetExtractionRequest> requests,
@@ -48,14 +48,14 @@ internal static class ExileAuraAssetExtractor
             return new AssetExtractionResult(requests.Count, 0, skipped, $"Skipped {skipped}/{requests.Count} assets; all frames already exist.");
         }
 
-        using var ggpk = ExileAuraGgpk.Open(contentGgpkPath);
+        using var ggpk = ReAgentAuraGgpk.Open(contentGgpkPath);
         var files = new List<FileRecord>();
         var requestByPath = new Dictionary<string, AssetExtractionRequest>(StringComparer.OrdinalIgnoreCase);
         var missing = new List<string>();
 
         foreach (var request in pendingRequests)
         {
-            var normalizedPath = ExileAuraIconCache.NormalizeDdsPath(request.DdsPath);
+            var normalizedPath = ReAgentAuraIconCache.NormalizeDdsPath(request.DdsPath);
             if (string.IsNullOrWhiteSpace(normalizedPath) || !ggpk.Index.TryGetFile(normalizedPath, out var file))
             {
                 missing.Add(request.DdsPath);
@@ -80,7 +80,7 @@ internal static class ExileAuraAssetExtractor
             }
 
             var outputPath = GetSafeAssetOutputPath(outputDirectory, request.OutputPngName);
-            ExileAuraDdsConverter.ConvertToPng(content.Value.ToArray(), outputPath, request.TargetWidth, request.TargetHeight);
+            ReAgentAuraDdsConverter.ConvertToPng(content.Value.ToArray(), outputPath, request.TargetWidth, request.TargetHeight);
             written++;
             return false;
         });
@@ -101,7 +101,7 @@ internal static class ExileAuraAssetExtractor
     {
         var root = Path.GetFullPath(outputDirectory);
         var outputPath = Path.GetFullPath(Path.Combine(root, outputName));
-        if (!ExileAuraPaths.IsInsideDirectory(root, outputPath))
+        if (!ReAgentAuraPaths.IsInsideDirectory(root, outputPath))
         {
             throw new InvalidOperationException("Asset output path escaped the output directory.");
         }
