@@ -1,7 +1,11 @@
 # ReAgent
 
+Documentation: [Reagent_Documentation.md](https://github.com/rushtothesun/ReAgent/blob/master/Reagent_Documentation.md)
+
 ## Changes in this fork
 
+- Added ReAgentAuras, a simple WeakAuras-style display system for showing rule-driven icons, timers, stack counts, charges, instance counts, and custom text.
+- Added group conditions, allowing an entire rule group to be gated by one shared condition before its rules run.
 - Added controller-aware rule APIs:
   - `State.IsUsingController`
   - `State.Controller.IsConnected`
