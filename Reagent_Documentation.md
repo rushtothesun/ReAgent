@@ -686,7 +686,7 @@ Create ReAgentAuras by making a `ReAgentAura Rule` group from the group `+` butt
 | `Manual Icon` | Uses an existing PNG path on disk. |
 
 For `Manual Icon`, enter the PNG path and press `Register Icon`.
-ReAgent validates that the file exists, creates a texture key from the rule id and manual icon path, and registers the image with ExileCore.
+ReAgent validates that the file exists, creates a texture key from the manual icon path, and registers the image with ExileCore.
 Changing the manual icon path changes the texture key so a previous registered image is not reused accidentally.
 
 For `Icon`, the source must be discoverable:

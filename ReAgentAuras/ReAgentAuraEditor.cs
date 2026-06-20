@@ -51,6 +51,11 @@ public sealed partial class ReAgentAurasModule
         var sourceName = rule.SourceName ?? string.Empty;
         if (ImGui.InputText("Source Name", ref sourceName, 160))
         {
+            if (!string.Equals(rule.SourceName, sourceName, StringComparison.Ordinal))
+            {
+                rule.ExtractedPngPath = "";
+            }
+
             rule.SourceName = sourceName;
         }
     }
@@ -117,7 +122,6 @@ public sealed partial class ReAgentAurasModule
         if (ImGui.InputText("Manual Icon PNG Path", ref manualIconPath, 512))
         {
             rule.ManualIconPath = manualIconPath;
-            rule.IconTextureKey = ReAgentAuraTextureKeys.ManualIcon(rule);
         }
 
         ImGui.PopItemWidth();
@@ -175,8 +179,8 @@ public sealed partial class ReAgentAurasModule
         }
 
         rule.ManualIconPath = path;
-        rule.IconTextureKey = ReAgentAuraTextureKeys.ManualIcon(rule);
-        if (TryEnsureImageRegistered(rule.IconTextureKey, path))
+        var textureKey = ReAgentAuraTextureKeys.ManualIcon(path);
+        if (TryEnsureImageRegistered(textureKey, path))
         {
             SetIconStatus(rule, ReAgentAuraIconStatusKind.Ready, "Manual icon registered.");
             return;
@@ -241,12 +245,7 @@ public sealed partial class ReAgentAurasModule
 
     private void DrawDisplayRow(ReAgentAuraRule rule, ReAgentAuraDisplay display, int index)
     {
-        if (string.IsNullOrWhiteSpace(display.Id))
-        {
-            display.Id = Guid.NewGuid().ToString("N");
-        }
-
-        ImGui.PushID(display.Id);
+        ImGui.PushID(index);
 
         var header = string.IsNullOrWhiteSpace(display.Name) ? GetDisplayEffectLabel(display.Effect) : display.Name;
         if (ImGui.TreeNodeEx($"{header}###display_header"))

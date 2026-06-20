@@ -4,6 +4,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using ExileCore2.Shared;
 using ExileCore2.Shared.Helpers;
 using ImGuiNET;
@@ -17,7 +18,7 @@ public sealed partial class ReAgentAurasModule
     private static readonly Color PlacementFrameColor = Color.FromArgb(210, 235, 190, 90);
 
     private readonly List<ReAgentAuraDisplayEntry> _displayEntries = new();
-    private string _draggingRuleId = "";
+    private ReAgentAuraRule _draggingRule;
 
     internal void Render(Profile profile, RuleState state)
     {
@@ -66,7 +67,7 @@ public sealed partial class ReAgentAurasModule
 
         if (entries.Count == 0)
         {
-            _draggingRuleId = "";
+            _draggingRule = null;
             return;
         }
 
@@ -124,11 +125,12 @@ public sealed partial class ReAgentAurasModule
     {
         if (!Settings.Unlocked.Value)
         {
-            _draggingRuleId = "";
+            _draggingRule = null;
             return;
         }
 
         var rule = entry.Rule;
+        var runtimeId = RuntimeHelpers.GetHashCode(rule);
         var dragRectMin = position - new Vector2(7f, 22f);
         var dragSize = size + new Vector2(14f, 29f);
         var flags = ImGuiWindowFlags.NoTitleBar
@@ -145,22 +147,22 @@ public sealed partial class ReAgentAurasModule
         ImGui.SetNextWindowSize(dragSize, ImGuiCond.Always);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
 
-        if (ImGui.Begin($"##reagentauras_drag_surface_{rule.Id}", flags))
+        if (ImGui.Begin($"##reagentauras_drag_surface_{runtimeId}", flags))
         {
-            ImGui.InvisibleButton($"##reagentauras_drag_button_{rule.Id}", dragSize);
+            ImGui.InvisibleButton($"##reagentauras_drag_button_{runtimeId}", dragSize);
             var hovered = ImGui.IsItemHovered();
             var active = ImGui.IsItemActive();
 
             if (active)
             {
-                _draggingRuleId = rule.Id;
+                _draggingRule = rule;
             }
-            else if (string.Equals(_draggingRuleId, rule.Id, StringComparison.Ordinal) && !ImGui.IsMouseDown(ImGuiMouseButton.Left))
+            else if (ReferenceEquals(_draggingRule, rule) && !ImGui.IsMouseDown(ImGuiMouseButton.Left))
             {
-                _draggingRuleId = "";
+                _draggingRule = null;
             }
 
-            var draggingThisRule = string.Equals(_draggingRuleId, rule.Id, StringComparison.Ordinal);
+            var draggingThisRule = ReferenceEquals(_draggingRule, rule);
             if (hovered || draggingThisRule)
             {
                 ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
@@ -254,15 +256,10 @@ public sealed partial class ReAgentAurasModule
 
     private bool TryEnsureRuleIconRegistered(ReAgentAuraRule rule, out string textureKey)
     {
-        var expectedTextureKey = rule.Visual == ReAgentAuraVisualSource.ManualIcon
-            ? ReAgentAuraTextureKeys.ManualIcon(rule)
-            : ReAgentAuraTextureKeys.Icon(rule);
-        textureKey = rule.Visual == ReAgentAuraVisualSource.ManualIcon || string.IsNullOrWhiteSpace(rule.IconTextureKey)
-            ? expectedTextureKey
-            : rule.IconTextureKey;
-        rule.IconTextureKey = textureKey;
-
         var iconPath = rule.Visual == ReAgentAuraVisualSource.ManualIcon ? rule.ManualIconPath : rule.ExtractedPngPath;
+        textureKey = rule.Visual == ReAgentAuraVisualSource.ManualIcon
+            ? ReAgentAuraTextureKeys.ManualIcon(iconPath)
+            : ReAgentAuraTextureKeys.Icon(iconPath);
         return !string.IsNullOrWhiteSpace(iconPath) && File.Exists(iconPath) && TryEnsureImageRegistered(textureKey, iconPath);
     }
 

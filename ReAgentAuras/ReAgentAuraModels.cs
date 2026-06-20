@@ -33,7 +33,6 @@ public enum ReAgentAuraStartPosition
 
 public sealed class ReAgentAuraRule
 {
-    public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Name { get; set; } = "New ReAgentAura";
     public string SourceName { get; set; } = "";
     public string Frame { get; set; } = "None";
@@ -44,14 +43,12 @@ public sealed class ReAgentAuraRule
     public Color Color { get; set; } = Color.FromArgb(230, 90, 110, 150);
     public string ManualIconPath { get; set; } = "";
     public string ExtractedPngPath { get; set; } = "";
-    public string IconTextureKey { get; set; } = "";
     public string ConditionSource { get; set; } = "false";
     public List<ReAgentAuraDisplay> Displays { get; set; } = [];
 }
 
 public sealed class ReAgentAuraDisplay
 {
-    public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Name { get; set; } = "New Display";
     public ReAgentAuraDisplayEffect Effect { get; set; } = ReAgentAuraDisplayEffect.ShowTimer;
     public ReAgentAuraStartPosition StartPosition { get; set; } = ReAgentAuraStartPosition.Bottom;

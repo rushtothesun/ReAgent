@@ -13,7 +13,7 @@ internal sealed class ReAgentAuraConditionCompiler
 {
     private delegate T ScriptFunc<T>(RuleState State, Func<string, ReAgentAuraDisplayRuntime> Display);
 
-    private readonly Dictionary<string, CachedCondition> _conditions = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Lazy<CompiledCondition>> _conditions = new(StringComparer.Ordinal);
 
     public ReAgentAuraEvaluation Evaluate(ReAgentAuraRule rule, RuleState state)
     {
@@ -84,15 +84,14 @@ internal sealed class ReAgentAuraConditionCompiler
     private CompiledCondition GetCompiledCondition(ReAgentAuraRule rule)
     {
         var source = rule.ConditionSource ?? string.Empty;
-        if (_conditions.TryGetValue(rule.Id, out var cached) &&
-            string.Equals(cached.Source, source, StringComparison.Ordinal))
+        if (_conditions.TryGetValue(source, out var cached))
         {
-            return cached.Condition.Value;
+            return cached.Value;
         }
 
-        var next = new CachedCondition(source, new Lazy<CompiledCondition>(() => Compile(source)));
-        _conditions[rule.Id] = next;
-        return next.Condition.Value;
+        var next = new Lazy<CompiledCondition>(() => Compile(source));
+        _conditions[source] = next;
+        return next.Value;
     }
 
     private static CompiledCondition Compile(string source)
@@ -111,7 +110,6 @@ internal sealed class ReAgentAuraConditionCompiler
         }
     }
 
-    private sealed record CachedCondition(string Source, Lazy<CompiledCondition> Condition);
     private sealed record CompiledCondition(Func<RuleState, Func<string, ReAgentAuraDisplayRuntime>, bool> Func, string Error);
 }
 

@@ -18,7 +18,7 @@ public sealed partial class ReAgentAurasModule
     private readonly ReAgentAuraIconCache _iconCache = new();
     private readonly ReAgentAuraConditionCompiler _conditionCompiler = new();
     private readonly HashSet<string> _registeredTextureKeys = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, ReAgentAuraIconStatus> _iconStatuses = new(StringComparer.Ordinal);
+    private readonly Dictionary<ReAgentAuraRule, ReAgentAuraIconStatus> _iconStatuses = new();
     private readonly object _assetExtractionSync = new();
 
     private long _nextPollMs;
@@ -199,10 +199,9 @@ public sealed partial class ReAgentAurasModule
             return;
         }
 
-        var textureKey = ReAgentAuraTextureKeys.Icon(rule);
         var (_, pngOutputPath) = ReAgentAuraIconCache.GetSafeOutputPaths(ResolveIconCacheDirectory(), normalizedPath);
+        var textureKey = ReAgentAuraTextureKeys.Icon(pngOutputPath);
         rule.ExtractedPngPath = pngOutputPath;
-        rule.IconTextureKey = textureKey;
 
         if (File.Exists(pngOutputPath))
         {
@@ -226,7 +225,6 @@ public sealed partial class ReAgentAurasModule
 
         var entry = ExtractRuleIcon(ddsFile);
         rule.ExtractedPngPath = entry.PngOutputPath;
-        rule.IconTextureKey = textureKey;
         var (kind, message) = entry.State switch
         {
             ReAgentAuraIconCacheState.Queued => (ReAgentAuraIconStatusKind.Queued, "Icon extraction queued."),
@@ -249,8 +247,7 @@ public sealed partial class ReAgentAurasModule
             return;
         }
 
-        var textureKey = string.IsNullOrWhiteSpace(rule.IconTextureKey) ? ReAgentAuraTextureKeys.Icon(rule) : rule.IconTextureKey;
-        rule.IconTextureKey = textureKey;
+        var textureKey = ReAgentAuraTextureKeys.Icon(rule.ExtractedPngPath);
         if (TryEnsureImageRegistered(textureKey, rule.ExtractedPngPath))
         {
             SetIconStatus(rule, ReAgentAuraIconStatusKind.Ready, "Icon extracted and registered.");
@@ -291,12 +288,12 @@ public sealed partial class ReAgentAurasModule
 
     private void SetIconStatus(ReAgentAuraRule rule, ReAgentAuraIconStatusKind kind, string message)
     {
-        _iconStatuses[rule.Id] = new ReAgentAuraIconStatus(kind, message, Environment.TickCount64 + StatusVisibleMs);
+        _iconStatuses[rule] = new ReAgentAuraIconStatus(kind, message, Environment.TickCount64 + StatusVisibleMs);
     }
 
     private ReAgentAuraIconStatus GetIconStatus(ReAgentAuraRule rule, bool includeExpiredPending = false)
     {
-        if (!_iconStatuses.TryGetValue(rule.Id, out var status))
+        if (!_iconStatuses.TryGetValue(rule, out var status))
         {
             return null;
         }
@@ -304,7 +301,7 @@ public sealed partial class ReAgentAurasModule
         var expired = Environment.TickCount64 >= status.ExpiresAtMs;
         if (status.Kind == ReAgentAuraIconStatusKind.None || (!status.IsPending && expired))
         {
-            _iconStatuses.Remove(rule.Id);
+            _iconStatuses.Remove(rule);
             return null;
         }
 
