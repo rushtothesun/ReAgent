@@ -249,9 +249,23 @@ public sealed partial class ReAgentAurasModule
         var innerX = position.X + ((layout.Width - layout.Width * layout.InnerScale) / 2f + layout.OffsetX) * scale;
         var innerY = position.Y + ((layout.Height - layout.Width * layout.InnerScale) / 2f + layout.OffsetY) * scale;
 
-        _plugin.Graphics.DrawImage(iconTextureKey, new ExileCore2.Shared.RectangleF(innerX, innerY, innerSize, innerSize));
-        _plugin.Graphics.DrawImage(frameTextureKey, new ExileCore2.Shared.RectangleF(position.X, position.Y, layout.Width * scale, layout.Height * scale));
+        var frameRect = new ExileCore2.Shared.RectangleF(position.X, position.Y, layout.Width * scale, layout.Height * scale);
+        var iconRect = new ExileCore2.Shared.RectangleF(innerX, innerY, innerSize, innerSize);
+        if (DrawsIconAboveFrame(rule.Frame))
+        {
+            _plugin.Graphics.DrawImage(frameTextureKey, frameRect);
+            _plugin.Graphics.DrawImage(iconTextureKey, iconRect);
+            return true;
+        }
+
+        _plugin.Graphics.DrawImage(iconTextureKey, iconRect);
+        _plugin.Graphics.DrawImage(frameTextureKey, frameRect);
         return true;
+    }
+
+    private static bool DrawsIconAboveFrame(string frameName)
+    {
+        return string.Equals(frameName, "minionframe", StringComparison.Ordinal);
     }
 
     private bool TryEnsureRuleIconRegistered(ReAgentAuraRule rule, out string textureKey)
