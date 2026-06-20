@@ -201,7 +201,7 @@ public sealed partial class ReAgentAurasModule
 
         var (_, pngOutputPath) = ReAgentAuraIconCache.GetSafeOutputPaths(ResolveIconCacheDirectory(), normalizedPath);
         var textureKey = ReAgentAuraTextureKeys.Icon(pngOutputPath);
-        rule.ExtractedPngPath = pngOutputPath;
+        rule.ExtractedPngPath = ToConfigRelativePath(pngOutputPath);
 
         if (File.Exists(pngOutputPath))
         {
@@ -224,7 +224,7 @@ public sealed partial class ReAgentAurasModule
         }
 
         var entry = ExtractRuleIcon(ddsFile);
-        rule.ExtractedPngPath = entry.PngOutputPath;
+        rule.ExtractedPngPath = ToConfigRelativePath(entry.PngOutputPath);
         var (kind, message) = entry.State switch
         {
             ReAgentAuraIconCacheState.Queued => (ReAgentAuraIconStatusKind.Queued, "Icon extraction queued."),
@@ -240,15 +240,16 @@ public sealed partial class ReAgentAurasModule
     private void RefreshPendingIconStatus(ReAgentAuraRule rule)
     {
         var status = GetIconStatus(rule, includeExpiredPending: true);
-        if (string.IsNullOrWhiteSpace(rule.ExtractedPngPath) ||
-            !File.Exists(rule.ExtractedPngPath) ||
+        var extractedPngPath = ResolveExtractedPngPath(rule);
+        if (string.IsNullOrWhiteSpace(extractedPngPath) ||
+            !File.Exists(extractedPngPath) ||
             status?.IsPending != true)
         {
             return;
         }
 
-        var textureKey = ReAgentAuraTextureKeys.Icon(rule.ExtractedPngPath);
-        if (TryEnsureImageRegistered(textureKey, rule.ExtractedPngPath))
+        var textureKey = ReAgentAuraTextureKeys.Icon(extractedPngPath);
+        if (TryEnsureImageRegistered(textureKey, extractedPngPath))
         {
             SetIconStatus(rule, ReAgentAuraIconStatusKind.Ready, "Icon extracted and registered.");
         }
@@ -316,6 +317,44 @@ public sealed partial class ReAgentAurasModule
     private string ResolveFramesDirectory()
     {
         return Path.Combine(_plugin.ConfigDirectory, "ReAgentAuras", "Frames");
+    }
+
+    private string ResolveExtractedPngPath(ReAgentAuraRule rule)
+    {
+        var path = ResolveConfigPath(rule.ExtractedPngPath);
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            rule.ExtractedPngPath = ToConfigRelativePath(path);
+        }
+
+        return path;
+    }
+
+    private string ResolveConfigPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return "";
+        }
+
+        path = path.Trim();
+        return Path.GetFullPath(Path.IsPathRooted(path)
+            ? path
+            : Path.Combine(_plugin.ConfigDirectory, path));
+    }
+
+    private string ToConfigRelativePath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return "";
+        }
+
+        var fullPath = Path.GetFullPath(path);
+        var configDirectory = Path.GetFullPath(_plugin.ConfigDirectory);
+        return ReAgentAuraPaths.IsInsideDirectory(configDirectory, fullPath)
+            ? Path.GetRelativePath(configDirectory, fullPath)
+            : fullPath;
     }
 
     private string ResolveContentGgpkPath()

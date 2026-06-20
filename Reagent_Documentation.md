@@ -717,6 +717,8 @@ Extracted assets are written under the plugin config directory:
 | Frames | `ReAgentAuras/Frames` |
 | Icons | `ReAgentAuras/Icons` |
 
+Saved `ExtractedPngPath` values are relative to the ReAgent plugin config directory.
+
 DDS files are temporary. ReAgent converts them to PNG and removes the DDS when icon extraction succeeds.
 
 Icon output names are flattened and include a stable hash of the source GGPK path, such as:

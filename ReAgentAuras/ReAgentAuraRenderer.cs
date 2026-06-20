@@ -256,7 +256,7 @@ public sealed partial class ReAgentAurasModule
 
     private bool TryEnsureRuleIconRegistered(ReAgentAuraRule rule, out string textureKey)
     {
-        var iconPath = rule.Visual == ReAgentAuraVisualSource.ManualIcon ? rule.ManualIconPath : rule.ExtractedPngPath;
+        var iconPath = rule.Visual == ReAgentAuraVisualSource.ManualIcon ? rule.ManualIconPath : ResolveExtractedPngPath(rule);
         textureKey = rule.Visual == ReAgentAuraVisualSource.ManualIcon
             ? ReAgentAuraTextureKeys.ManualIcon(iconPath)
             : ReAgentAuraTextureKeys.Icon(iconPath);
