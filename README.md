@@ -2,6 +2,9 @@
 
 Documentation: [Reagent_Documentation.md](https://github.com/rushtothesun/ReAgent/blob/master/Reagent_Documentation.md)
 
+> [!WARNING]
+> Icon/frame extraction requires `oo2core` to be placed in the ExileCore2 base folder. `oo2core` is not distributed with this plugin.
+
 ## Changes in this fork
 
 - Added ReAgentAuras, a simple WeakAuras-style display system for showing rule-driven icons, timers, stack counts, charges, instance counts, and custom text.
